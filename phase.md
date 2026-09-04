@@ -6,7 +6,7 @@
 > |---|---|---|
 > | 1 | Scaffold, deploy, auth | ✅ code complete — build + typecheck green; deploy/login pending Neon + Google OAuth credentials |
 > | 2 | Gmail ingest + minimal analysis + dashboard (vertical slice) | ✅ code complete — Gmail client, MIME parsing, stub heuristic scorer, batched scan job (start/tick/status), live loading screen + dashboard; needs a real inbox to verify |
-> | 3 | Detector framework + deterministic detectors | ⬜ not started |
+> | 3 | Detector framework + deterministic detectors | ✅ code complete — pluggable pipeline, mailauth SPF re-check + Received-chain origin, DKIM/DMARC, impersonation, homoglyph/typosquat lookalike, header anomaly, interim attachment/url/content detectors; 31 unit tests green |
 > | 4 | URL + attachment analysis + domain intel (RDAP) | ⬜ not started |
 > | 5 | Featherless LLM layer (content, BEC, social engineering) | ⬜ not started |
 > | 6 | Geolocation & forensic intelligence | ⬜ not started |

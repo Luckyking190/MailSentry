@@ -4,8 +4,15 @@ import { prisma } from "@/server/db";
 import { getGmailClient } from "@/server/gmail/client";
 import { fetchRawMessage } from "@/server/gmail/fetchRaw";
 import { parseEmail } from "@/server/mail/parse";
-import { analyzeStub } from "@/server/detect/stub";
+import { runPipeline } from "@/server/detect/pipeline";
 import { toProgress, type ScanProgress } from "./job";
+
+type SettingsInput = {
+  detectorWeights: unknown;
+  bandThresholds: unknown;
+  brandWatchlist: string[];
+  enableLlm: boolean;
+};
 
 const BATCH_SIZE = Math.max(1, Number(process.env.SCAN_BATCH_SIZE ?? 5));
 const SOFT_TIME_BUDGET_MS = 40_000;
@@ -31,14 +38,27 @@ export async function tickScan(
   let processed = job.processed;
   let failed = job.failed;
 
-  const gmail = await getGmailClient(userId);
+  const [gmail, settingsRow] = await Promise.all([
+    getGmailClient(userId),
+    prisma.userSettings.upsert({
+      where: { userId },
+      create: { userId },
+      update: {},
+    }),
+  ]);
+  const settings: SettingsInput = {
+    detectorWeights: settingsRow.detectorWeights,
+    bandThresholds: settingsRow.bandThresholds,
+    brandWatchlist: settingsRow.brandWatchlist,
+    enableLlm: settingsRow.enableLlm,
+  };
 
   while (queue.length > 0 && Date.now() - started < SOFT_TIME_BUDGET_MS) {
     const batch = queue.slice(0, BATCH_SIZE);
     queue = queue.slice(BATCH_SIZE);
 
     const outcomes = await Promise.allSettled(
-      batch.map((id) => processOne(userId, job!.id, gmail, id)),
+      batch.map((id) => processOne(userId, job!.id, gmail, settings, id)),
     );
 
     for (const o of outcomes) {
@@ -70,11 +90,12 @@ async function processOne(
   userId: string,
   scanJobId: string,
   gmail: Awaited<ReturnType<typeof getGmailClient>>,
+  settings: SettingsInput,
   gmailId: string,
 ): Promise<string> {
   const rawMsg = await fetchRawMessage(gmail, gmailId);
   const parsed = await parseEmail(rawMsg.raw, rawMsg.snippet ?? undefined);
-  const outcome = analyzeStub(parsed);
+  const outcome = await runPipeline({ email: parsed, userId, settings });
 
   const email = await prisma.emailRecord.upsert({
     where: {
