@@ -1,36 +1,50 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# MailSentry — SIH26106
 
-## Getting Started
+**AI-powered email threat detection, geolocation & forensic intelligence platform.**
 
-First, run the development server:
+Connects to a user's Gmail (Google OAuth, read-only), analyzes every message for
+phishing, sender spoofing / impersonation, malicious URLs & attachments, social
+engineering and Business Email Compromise, assigns a **0–100 fraud/risk score**
+with a human-readable explanation, and adds **geolocation + forensic
+intelligence** per mail (originating IP, mail-server hop timeline,
+SPF/DKIM/DMARC authenticity).
+
+Smart India Hackathon — problem statement **SIH26106**.
+
+## Stack
+
+- **Next.js 16** (App Router, TypeScript, Turbopack) — deployed on **Vercel**
+- **Auth.js v5** + Google OAuth (`gmail.readonly`)
+- **Prisma 6** + **Neon** Postgres
+- **Featherless AI** (OpenAI-compatible) for NLP / BEC / social-engineering analysis
+- **ipinfo.io** for sender-IP geolocation
+- `mailparser` + `mailauth` for MIME parsing and SPF/DKIM/DMARC + Received-chain
+
+## Local development
+
+Node 24 is vendored at `~/.local/node` (not on the system PATH). Prefix commands:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+export PATH="$HOME/.local/node/bin:$PATH"
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Then:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm install
+cp docs/ENV.md …          # see docs/ENV.md, create .env.local
+npm run db:push           # push schema to Neon
+npm run dev               # http://localhost:3000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+See **[docs/ENV.md](docs/ENV.md)** for every environment variable and the
+Google OAuth / Neon setup steps.
 
-## Learn More
+## Documentation
 
-To learn more about Next.js, take a look at the following resources:
+- **[docs/SIH26106-SPEC.md](docs/SIH26106-SPEC.md)** — the hackathon brief
+- **[phase.md](phase.md)** — 8-phase implementation plan with a status tracker
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Project status
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Phase 1 (scaffold, auth, app shell) in progress — see the tracker in `phase.md`.

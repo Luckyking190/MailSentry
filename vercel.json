@@ -1,0 +1,7 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "src/app/api/scan/tick/route.ts": { "maxDuration": 300 },
+    "src/app/api/demo/load/route.ts": { "maxDuration": 300 }
+  }
+}

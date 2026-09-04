@@ -1,0 +1,307 @@
+// MailSentry — SIH26106 data model
+// Prisma 6 · PostgreSQL (Neon)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Auth.js (NextAuth v5) — standard Prisma adapter models
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+
+  accounts Account[]
+  sessions Session[]
+  settings UserSettings?
+  scanJobs ScanJob[]
+  emails   EmailRecord[]
+}
+
+model Account {
+  id                       String  @id @default(cuid())
+  userId                   String
+  type                     String
+  provider                 String
+  providerAccountId        String
+  refresh_token            String? @db.Text
+  access_token             String? @db.Text
+  expires_at               Int?
+  token_type               String?
+  scope                    String?
+  id_token                 String? @db.Text
+  session_state            String?
+  refresh_token_expires_in Int?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ---------------------------------------------------------------------------
+// Per-user configuration (weights, thresholds, scan tuning, watchlist)
+// ---------------------------------------------------------------------------
+
+model UserSettings {
+  userId          String   @id
+  detectorWeights Json     @default("{}")
+  bandThresholds  Json     @default("{\"low\":20,\"medium\":40,\"high\":65,\"critical\":85}")
+  llmModel        String?
+  enableLlm       Boolean  @default(true)
+  scanWindowDays  Int      @default(90)
+  maxEmails       Int      @default(300)
+  brandWatchlist  String[] @default([])
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------------------------
+// Scan jobs — client-orchestrated, server-persisted queue
+// ---------------------------------------------------------------------------
+
+enum ScanPhase {
+  QUEUED
+  LISTING
+  FETCHING
+  ANALYZING
+  DOMAIN_INTEL
+  DONE
+  FAILED
+}
+
+enum EmailSource {
+  gmail
+  demo
+}
+
+model ScanJob {
+  id            String      @id @default(cuid())
+  userId        String
+  phase         ScanPhase   @default(QUEUED)
+  source        EmailSource @default(gmail)
+  total         Int         @default(0)
+  processed     Int         @default(0)
+  failed        Int         @default(0)
+  cursor        String?
+  messageQueue  Json        @default("[]")
+  bandHistogram Json        @default("{}")
+  error         String?
+  startedAt     DateTime    @default(now())
+  finishedAt    DateTime?
+
+  user   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emails EmailRecord[]
+
+  @@index([userId, phase])
+}
+
+// ---------------------------------------------------------------------------
+// Parsed emails + analysis
+// ---------------------------------------------------------------------------
+
+enum RiskBand {
+  SAFE
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model EmailRecord {
+  id             String      @id @default(cuid())
+  userId         String
+  scanJobId      String?
+  source         EmailSource @default(gmail)
+  gmailId        String?
+  messageIdHdr   String?
+  fromAddress    String
+  fromDisplay    String?
+  senderDomain   String
+  replyTo        String?
+  returnPath     String?
+  toAddresses    String[]    @default([])
+  subject        String      @default("")
+  sentAt         DateTime?
+  receivedAt     DateTime?
+  snippet        String?     @db.Text
+  bodyText       String?     @db.Text
+  bodyHtml       String?     @db.Text
+  rawHeaders     Json        @default("{}")
+  hasAttachments Boolean     @default(false)
+  createdAt      DateTime    @default(now())
+
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scanJob     ScanJob?         @relation(fields: [scanJobId], references: [id], onDelete: SetNull)
+  analysis    AnalysisResult?
+  geoIntel    GeoIntel[]
+  urls        UrlMeta[]
+  attachments AttachmentMeta[]
+
+  @@unique([userId, source, gmailId])
+  @@index([userId, senderDomain])
+  @@index([userId, sentAt])
+}
+
+model AnalysisResult {
+  id            String   @id @default(cuid())
+  emailId       String   @unique
+  score         Int      @default(0)
+  band          RiskBand @default(SAFE)
+  categories    String[] @default([])
+  summary       String   @default("") @db.Text
+  engineVersion String   @default("0")
+  llmModel      String?
+  llmDegraded   Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  email   EmailRecord @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  signals Signal[]
+}
+
+model Signal {
+  id           String   @id @default(cuid())
+  analysisId   String
+  detectorId   String
+  category     String
+  triggered    Boolean  @default(false)
+  rawScore     Float    @default(0)
+  confidence   Float    @default(1)
+  weight       Float    @default(0)
+  contribution Float    @default(0)
+  severity     String   @default("info")
+  evidence     Json     @default("[]")
+  tags         String[] @default([])
+
+  analysis AnalysisResult @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+
+  @@index([analysisId])
+}
+
+// ---------------------------------------------------------------------------
+// Forensic intelligence
+// ---------------------------------------------------------------------------
+
+model GeoIntel {
+  id              String    @id @default(cuid())
+  emailId         String
+  hopIndex        Int
+  ip              String
+  isTrustedOrigin Boolean   @default(false)
+  ptr             String?
+  country         String?
+  region          String?
+  city            String?
+  lat             Float?
+  lon             Float?
+  asn             String?
+  org             String?
+  timestamp       DateTime?
+  byHost          String?
+  fromHost        String?
+  provider        String    @default("ipinfo")
+  createdAt       DateTime  @default(now())
+
+  email EmailRecord @relation(fields: [emailId], references: [id], onDelete: Cascade)
+
+  @@index([emailId, hopIndex])
+}
+
+model UrlMeta {
+  id             String  @id @default(cuid())
+  emailId        String
+  rawUrl         String  @db.Text
+  finalUrl       String? @db.Text
+  host           String?
+  scheme         String?
+  anchorText     String?
+  anchorMismatch Boolean @default(false)
+  isShortener    Boolean @default(false)
+  isPunycode     Boolean @default(false)
+  redirectChain  Json    @default("[]")
+  lengthScore    Float?
+  entropyScore   Float?
+  domainAgeDays  Int?
+  verdict        String?
+
+  email EmailRecord @relation(fields: [emailId], references: [id], onDelete: Cascade)
+
+  @@index([emailId])
+}
+
+model AttachmentMeta {
+  id          String  @id @default(cuid())
+  emailId     String
+  filename    String
+  contentType String?
+  sizeBytes   Int?
+  extension   String?
+  isHighRisk  Boolean @default(false)
+  isDoubleExt Boolean @default(false)
+  isArchive   Boolean @default(false)
+  sha256      String?
+
+  email EmailRecord @relation(fields: [emailId], references: [id], onDelete: Cascade)
+
+  @@index([emailId])
+}
+
+// ---------------------------------------------------------------------------
+// Caches (shared across users)
+// ---------------------------------------------------------------------------
+
+model DomainReputation {
+  domain           String    @id
+  spfRecord        String?   @db.Text
+  spfAuthorizedIps Json      @default("[]")
+  hasDkimDns       Boolean?
+  dmarcPolicy      String?
+  registrar        String?
+  createdOn        DateTime?
+  domainAgeDays    Int?
+  mxHosts          String[]  @default([])
+  isDisposable     Boolean   @default(false)
+  lookalikeOf      String?
+  lookalikeScore   Float?
+  reputationNote   String?   @db.Text
+  refreshedAt      DateTime  @default(now())
+  ttlSeconds       Int       @default(86400)
+}
+
+model DnsCache {
+  key        String   @id
+  value      Json
+  fetchedAt  DateTime @default(now())
+  ttlSeconds Int      @default(3600)
+}
