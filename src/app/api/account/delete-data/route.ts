@@ -1,5 +1,5 @@
 import { auth } from "@/server/auth";
-import { prisma } from "@/server/db";
+import { wipeUserMail } from "@/server/account/wipe";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,11 +12,7 @@ export async function POST() {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const userId = session.user.id;
-  const [{ count: emailsDeleted }] = await prisma.$transaction([
-    prisma.emailRecord.deleteMany({ where: { userId } }),
-    prisma.scanJob.deleteMany({ where: { userId } }),
-  ]);
+  const emailsDeleted = await wipeUserMail(session.user.id);
 
   return Response.json({ emailsDeleted });
 }

@@ -3,6 +3,7 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 
 import { prisma } from "@/server/db";
 import { authConfig } from "@/server/auth.config";
+import { wipeUserMail } from "@/server/account/wipe";
 
 export { GMAIL_SCOPE } from "@/server/auth.config";
 
@@ -26,10 +27,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (!userId) return;
 
       try {
-        await prisma.$transaction([
-          prisma.emailRecord.deleteMany({ where: { userId } }),
-          prisma.scanJob.deleteMany({ where: { userId } }),
-        ]);
+        await wipeUserMail(userId);
       } catch {
         // Never let cleanup failure block the sign-out itself.
       }
