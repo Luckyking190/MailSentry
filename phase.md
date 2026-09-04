@@ -9,7 +9,7 @@
 > | 3 | Detector framework + deterministic detectors | ✅ code complete — pluggable pipeline, mailauth SPF re-check + Received-chain origin, DKIM/DMARC, impersonation, homoglyph/typosquat lookalike, header anomaly, interim attachment/url/content detectors; 31 unit tests green |
 > | 4 | URL + attachment analysis + domain intel (RDAP) | ✅ code complete — SSRF-guarded redirect resolver (IP-pinned), RDAP domain-age lookup, DomainReputation cache, upgraded url.analysis + attachment.analysis detectors, enriched UrlMeta/AttachmentMeta persistence; 38 tests green |
 > | 5 | Featherless LLM layer (content, BEC, social engineering) | ✅ code complete — OpenAI-compatible client, semaphore + backoff + Zod + repair-retry call layer, one combined prompt → 3 LLM-backed detectors, gated by `enableLlm` + degrades to deterministic-only with no API key; 53 tests green |
-> | 6 | Geolocation & forensic intelligence | ⬜ not started |
+> | 6 | Geolocation & forensic intelligence | ✅ code complete — ipinfo.io geolocation + PTR (cached), GeoIntel populated per public Received hop, `/mail/[id]` detail page: score gauge, signal blocks, hop timeline, Leaflet map, auth-authenticity card, links/attachments, raw headers |
 > | 7 | Demo mode, dashboard filters, mail page, settings | ⬜ not started |
 > | 8 | Hardening, tests, performance, submission polish | ⬜ not started |
 

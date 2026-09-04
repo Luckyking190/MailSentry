@@ -6,6 +6,8 @@ import { fetchRawMessage } from "@/server/gmail/fetchRaw";
 import { parseEmail } from "@/server/mail/parse";
 import { runPipeline } from "@/server/detect/pipeline";
 import { getDomainReputation } from "@/server/intel/reputation";
+import { analyzeReceivedChain } from "@/server/intel/received-chain";
+import { geolocateMany } from "@/server/intel/geoip";
 import { toProgress, type ScanProgress } from "./job";
 
 type SettingsInput = {
@@ -238,7 +240,50 @@ async function processOne(
   // Populate the shared domain-reputation cache (best effort; cached).
   await getDomainReputation(parsed.senderDomain).catch(() => {});
 
+  // Geolocate every public hop in the Received chain.
+  await persistGeoIntel(email.id, parsed.receivedChain).catch(() => {});
+
   return outcome.band;
+}
+
+async function persistGeoIntel(
+  emailId: string,
+  receivedHeaders: string[],
+): Promise<void> {
+  const { hops, originHop } = analyzeReceivedChain(receivedHeaders);
+  const publicHops = hops.filter((h) => h.isPublicIp && h.fromIp);
+  if (publicHops.length === 0) return;
+
+  const geos = await geolocateMany(
+    publicHops.map((h) => h.fromIp!),
+  );
+
+  await prisma.$transaction([
+    prisma.geoIntel.deleteMany({ where: { emailId } }),
+    prisma.geoIntel.createMany({
+      data: publicHops.map((h) => {
+        const g = geos.get(h.fromIp!);
+        return {
+          emailId,
+          hopIndex: h.index,
+          ip: h.fromIp!,
+          isTrustedOrigin: originHop?.index === h.index,
+          ptr: g?.ptr ?? null,
+          country: g?.country ?? null,
+          region: g?.region ?? null,
+          city: g?.city ?? null,
+          lat: g?.lat ?? null,
+          lon: g?.lon ?? null,
+          asn: g?.asn ?? null,
+          org: g?.org ?? null,
+          timestamp: h.timestamp,
+          byHost: h.byHost,
+          fromHost: h.fromHost,
+          provider: g?.provider ?? "unknown",
+        };
+      }),
+    }),
+  ]);
 }
 
 export type { ScanJob };
