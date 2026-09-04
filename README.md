@@ -32,7 +32,7 @@ Then:
 
 ```bash
 npm install
-cp docs/ENV.md …          # see docs/ENV.md, create .env.local
+# see docs/ENV.md, then create .env.local
 npm run db:push           # push schema to Neon
 npm run dev               # http://localhost:3000
 ```
@@ -47,4 +47,4 @@ Google OAuth / Neon setup steps.
 
 ## Project status
 
-Phase 1 (scaffold, auth, app shell) in progress — see the tracker in `phase.md`.
+Phase 1 (scaffold, auth, app shell) complete — see the tracker in `phase.md`.
