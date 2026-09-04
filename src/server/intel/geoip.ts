@@ -81,31 +81,33 @@ async function fetchFromIpinfo(ip: string): Promise<GeoRecord> {
   }
 }
 
-/** Cached IP → geo/ASN lookup (ipinfo.io), with reverse-DNS PTR attached. */
+/**
+ * Cached IP → geo/ASN lookup (ipinfo.io), with reverse-DNS PTR attached.
+ *
+ * In-process cache only on the read path: the ipinfo call is ~200-400ms
+ * while a Neon round trip measured ~261ms read + ~348ms write, so consulting
+ * the DB first cost more than it saved. Successful lookups are still written
+ * through so a cold process can reuse them.
+ */
 export async function geolocateIp(ip: string): Promise<GeoRecord> {
   const now = Date.now();
   const mem = memCache.get(ip);
   if (mem && mem.expires > now) return mem.value;
 
   const key = `GEO:${ip}`;
-  const row = await prisma.dnsCache.findUnique({ where: { key } }).catch(() => null);
-  if (row && row.fetchedAt.getTime() + row.ttlSeconds * 1000 > now) {
-    const v = row.value as GeoRecord;
-    memCache.set(ip, { value: v, expires: now + MEM_TTL_MS });
-    return v;
-  }
-
   const [geo, ptr] = await Promise.all([fetchFromIpinfo(ip), reversePtr(ip)]);
   const value: GeoRecord = { ...geo, ptr };
 
   memCache.set(ip, { value, expires: now + MEM_TTL_MS });
-  await prisma.dnsCache
-    .upsert({
-      where: { key },
-      create: { key, value: value as object, ttlSeconds: DB_TTL_S },
-      update: { value: value as object, ttlSeconds: DB_TTL_S, fetchedAt: new Date() },
-    })
-    .catch(() => {});
+  if (value.provider !== "unknown") {
+    await prisma.dnsCache
+      .upsert({
+        where: { key },
+        create: { key, value: value as object, ttlSeconds: DB_TTL_S },
+        update: { value: value as object, ttlSeconds: DB_TTL_S, fetchedAt: new Date() },
+      })
+      .catch(() => {});
+  }
 
   return value;
 }

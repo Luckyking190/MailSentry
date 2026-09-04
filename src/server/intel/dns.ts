@@ -1,21 +1,33 @@
 import { promises as dns } from "node:dns";
 
-import { prisma } from "@/server/db";
-
 type Rrtype = "TXT" | "MX" | "A" | "AAAA" | "CNAME" | "NS";
 
 const memCache = new Map<string, { value: unknown; expires: number }>();
-const MEM_TTL_MS = 5 * 60_000;
-const NEG_TTL_S = 300;
-const POS_TTL_S = 3600;
+const POS_TTL_MS = 30 * 60_000;
+const NEG_TTL_MS = 5 * 60_000;
+const DNS_TIMEOUT_MS = 2_500;
 
 function keyFor(name: string, rrtype: Rrtype) {
   return `DNS:${rrtype}:${name.toLowerCase()}`;
 }
 
+function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
+  ]);
+}
+
 /**
  * Cached DNS resolve that mimics `dns.promises.resolve(name, rrtype)`.
- * Two tiers: in-process Map (warm lambda) + `DnsCache` table (cross-invocation).
+ *
+ * Deliberately in-process only. This used to also read/write a `DnsCache`
+ * row per lookup, but a Neon round trip measured ~261ms read / ~348ms write
+ * against a ~243ms real DNS query — i.e. the "cache" cost roughly 2.5x what
+ * it saved, and an SPF evaluation (up to 10 chained lookups under RFC 7208)
+ * paid that on every one of them, blowing past its own timeout. The OS
+ * resolver already caches, and this Map keeps a warm process fast.
+ *
  * Lookup failures resolve to `[]` and are cached briefly so a dead domain
  * never repeatedly stalls a scan.
  */
@@ -29,30 +41,21 @@ export async function dnsResolve<T = string[]>(
   const mem = memCache.get(key);
   if (mem && mem.expires > now) return mem.value as T;
 
-  const row = await prisma.dnsCache.findUnique({ where: { key } }).catch(() => null);
-  if (row && row.fetchedAt.getTime() + row.ttlSeconds * 1000 > now) {
-    memCache.set(key, { value: row.value, expires: now + MEM_TTL_MS });
-    return row.value as T;
-  }
-
   let value: unknown = [];
-  let ttl = POS_TTL_S;
+  let ttl = POS_TTL_MS;
   try {
-    value = await dns.resolve(name, rrtype as "TXT");
+    value = await withTimeout(
+      dns.resolve(name, rrtype as "TXT"),
+      DNS_TIMEOUT_MS,
+      [] as unknown as string[][],
+    );
+    if (Array.isArray(value) && value.length === 0) ttl = NEG_TTL_MS;
   } catch {
     value = [];
-    ttl = NEG_TTL_S;
+    ttl = NEG_TTL_MS;
   }
 
-  memCache.set(key, { value, expires: now + MEM_TTL_MS });
-  await prisma.dnsCache
-    .upsert({
-      where: { key },
-      create: { key, value: value as object, ttlSeconds: ttl },
-      update: { value: value as object, ttlSeconds: ttl, fetchedAt: new Date() },
-    })
-    .catch(() => {});
-
+  memCache.set(key, { value, expires: now + ttl });
   return value as T;
 }
 
@@ -78,11 +81,11 @@ export async function reversePtr(ip: string): Promise<string | null> {
   if (mem && mem.expires > Date.now()) return (mem.value as string) || null;
   let ptr: string | null = null;
   try {
-    const names = await dns.reverse(ip);
+    const names = await withTimeout(dns.reverse(ip), DNS_TIMEOUT_MS, [] as string[]);
     ptr = names[0] ?? null;
   } catch {
     ptr = null;
   }
-  memCache.set(key, { value: ptr ?? "", expires: Date.now() + MEM_TTL_MS });
+  memCache.set(key, { value: ptr ?? "", expires: Date.now() + POS_TTL_MS });
   return ptr;
 }

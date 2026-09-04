@@ -13,10 +13,32 @@ runtime; the `NEXT_PUBLIC_` prefix is not used — everything here is server-sid
 | `GOOGLE_CLIENT_SECRET` | ✅ | Same OAuth client. |
 | `FEATHERLESS_API_KEY` | ⬜ | Featherless AI key (featherless.ai → Settings → API keys). Without it the NLP/BEC/social-engineering detectors report "AI analysis unavailable" and the score is deterministic-only — nothing crashes. |
 | `FEATHERLESS_BASE_URL` | ⬜ | Default `https://api.featherless.ai/v1`. |
-| `FEATHERLESS_MODEL` | ⬜ | Default `Qwen/Qwen2.5-72B-Instruct` (needs the $25 Premium plan; use an ≤15B model, e.g. `meta-llama/Meta-Llama-3.1-8B-Instruct`, on the $10 Basic plan). |
-| `FEATHERLESS_MAX_CONCURRENCY` | ⬜ | Default `3` in-flight requests — Featherless limits by concurrent "units" (2 on Basic, 4 on Premium), not token volume. |
+| `FEATHERLESS_MODEL` | ⬜ | Default `Qwen/Qwen2.5-14B-Instruct`. See **Choosing a Featherless model** below before switching to a larger one. |
+| `FEATHERLESS_MAX_CONCURRENCY` | ⬜ | Default `4` in-flight requests. Match this to your plan's concurrency-unit limit — see below. |
 | `IPINFO_TOKEN` | ⬜ (Phase 6) | ipinfo.io token for sender-IP geolocation. |
-| `SCAN_BATCH_SIZE` | ⬜ | Default `5` emails per `/api/scan/tick`. |
+| `SCAN_BATCH_SIZE` | ⬜ | Default `8` emails per `/api/scan/tick`. |
+
+## Choosing a Featherless model
+
+Featherless bills concurrency in **per-model units**, not a flat request
+count, and the cost scales steeply with model size (measured against a
+`feather_pro_plus` key with a 4-unit plan limit):
+
+| Model | Cost | Concurrent requests on a 4-unit plan |
+|---|---|---|
+| `Qwen/Qwen2.5-7B-Instruct` / `Qwen/Qwen2.5-14B-Instruct` | 1 unit | 4 |
+| `Qwen/Qwen2.5-32B-Instruct` | 2 units | 2 |
+| `Qwen/Qwen2.5-72B-Instruct` | 4 units | **1** |
+
+A 70B-class model isn't just slower per call — on most plans it consumes
+the *entire* concurrency budget, so every other "concurrent" request from
+the scan batch immediately 429s and burns a retry (each retry adds ~1.5–9s
+of pure backoff). That compounds fast across a batch and was the primary
+cause of a very slow scan in testing. Unless you're on a large enough plan
+to run several 70B calls at once, prefer a ≤15B model — the analysis
+quality difference is modest for this use case, and the throughput gain is
+roughly 4x. Set `FEATHERLESS_MAX_CONCURRENCY` to match your plan's *unit*
+limit divided by the chosen model's unit cost, not the raw plan number.
 
 ## Google OAuth setup (one-time)
 

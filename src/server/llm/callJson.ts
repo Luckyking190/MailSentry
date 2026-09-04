@@ -9,8 +9,38 @@ import {
 
 const limit = pLimit(FEATHERLESS_MAX_CONCURRENCY);
 
-const CALL_TIMEOUT_MS = 20_000;
-const MAX_ATTEMPTS = 3;
+// <=15B-class models on Featherless normally answer a full email-analysis
+// prompt in 1-3s, so 8s is already 3x headroom. Past that the provider is
+// congested, and since a client abort doesn't hand its concurrency unit back,
+// retrying only deepens the hole — bail to a deterministic-only score.
+const CALL_TIMEOUT_MS = 8_000;
+const MAX_ATTEMPTS = 2;
+
+// Congestion is a property of the provider, not of one message. Without this,
+// every email in a batch independently spends its full timeout rediscovering
+// the same outage — measured as 50s for 6 messages. After a few consecutive
+// failures, stop asking for a bit and let the deterministic detectors carry
+// the scan; one success closes it again.
+const BREAKER_THRESHOLD = 3;
+const BREAKER_COOLDOWN_MS = 60_000;
+let consecutiveFailures = 0;
+let breakerOpenUntil = 0;
+
+function breakerOpen(): boolean {
+  if (Date.now() < breakerOpenUntil) return true;
+  if (breakerOpenUntil) {
+    // cooldown elapsed — allow a probe through
+    breakerOpenUntil = 0;
+    consecutiveFailures = 0;
+  }
+  return false;
+}
+
+function recordFailure() {
+  if (++consecutiveFailures >= BREAKER_THRESHOLD) {
+    breakerOpenUntil = Date.now() + BREAKER_COOLDOWN_MS;
+  }
+}
 
 export type JsonCallResult<T> =
   | { ok: true; data: T; repaired: boolean }
@@ -63,7 +93,10 @@ async function rawCall(
         messages,
         temperature: 0.1,
         top_p: 0.9,
-        max_tokens: 1100,
+        // The combined content/bec/social object lands around 300 tokens;
+        // generation time scales with output length, so don't leave room to
+        // ramble.
+        max_tokens: 700,
         ...(useJsonMode
           ? { response_format: { type: "json_object" as const } }
           : {}),
@@ -93,6 +126,8 @@ export async function callJson<T>(
   user: string,
   repair: (bad: string) => { system: string; user: string },
 ): Promise<JsonCallResult<T>> {
+  if (breakerOpen()) return { ok: false, reason: "provider congested" };
+
   return limit(async () => {
     let jsonMode = true;
     let lastRaw = "";
@@ -116,6 +151,7 @@ export async function callJson<T>(
         if (parsedJson !== undefined) {
           const parsed = schema.safeParse(parsedJson);
           if (parsed.success) {
+            consecutiveFailures = 0;
             return { ok: true, data: parsed.data, repaired: false };
           }
         }
@@ -126,9 +162,30 @@ export async function callJson<T>(
           jsonMode = false; // model/endpoint rejects json_object — retry plain
           continue;
         }
-        if (s === 429 || (s !== undefined && s >= 500) || s === undefined) {
+        // 429 here means the *provider's* concurrency budget is exhausted,
+        // not that we sent too many ourselves (p-limit already caps that).
+        // Aborting/retrying does not hand the unit back any sooner, so a
+        // retry storm only deepens the hole and stalls the whole scan.
+        // Give it one brief chance, then fall back to a deterministic-only
+        // score for this message — the scan keeps moving.
+        if (s === 429) {
+          if (attempt === 1) {
+            await sleep(1200);
+            continue;
+          }
+          recordFailure();
+          return { ok: false, reason: "capacity (429)" };
+        }
+        // A timeout (abort — no status) already cost us the full budget and
+        // its concurrency unit is still held provider-side; retrying just
+        // spends another budget to learn the same thing.
+        if (s === undefined) {
+          recordFailure();
+          return { ok: false, reason: "timeout" };
+        }
+        if (s >= 500) {
           if (attempt < MAX_ATTEMPTS) {
-            await sleep(attempt * 1500);
+            await sleep(attempt * 800);
             continue;
           }
         }
@@ -149,12 +206,14 @@ export async function callJson<T>(
       const candidate = extractJson(repaired) ?? repaired;
       const parsed = schema.safeParse(JSON.parse(candidate));
       if (parsed.success) {
+        consecutiveFailures = 0;
         return { ok: true, data: parsed.data, repaired: true };
       }
     } catch {
       /* fall through */
     }
 
+    recordFailure();
     return { ok: false, reason: "unparseable model output" };
   });
 }

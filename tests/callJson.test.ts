@@ -87,3 +87,23 @@ describe("callJson", () => {
     expect(secondCallArgs.response_format).toBeUndefined();
   });
 });
+
+describe("circuit breaker", () => {
+  it("stops calling the provider after repeated failures", async () => {
+    // Fresh module instance so the breaker counters start at zero and this
+    // test leaves the shared instance above untouched.
+    vi.resetModules();
+    const { callJson: fresh } = await import("@/server/llm/callJson");
+
+    createMock.mockReset();
+    createMock.mockResolvedValue(reply("not json"));
+
+    for (let i = 0; i < 3; i++) await fresh(schema, "sys", "user", repair);
+    const callsBeforeOpen = createMock.mock.calls.length;
+    expect(callsBeforeOpen).toBeGreaterThan(0);
+
+    const res = await fresh(schema, "sys", "user", repair);
+    expect(res.ok).toBe(false);
+    expect(createMock.mock.calls.length).toBe(callsBeforeOpen);
+  });
+});

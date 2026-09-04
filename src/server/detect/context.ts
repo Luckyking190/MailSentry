@@ -93,6 +93,19 @@ async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
   ]);
 }
 
+/**
+ * An SPF evaluation is deterministic for a given (sender domain, client IP)
+ * pair and is by far the most DNS-heavy step in the pipeline, so memoise the
+ * whole verdict — a mailbox is dominated by a handful of repeat senders, and
+ * this turns every repeat into a no-op instead of re-walking the include:
+ * chain. In-process only; deliberately not a DB cache (see intel/dns.ts).
+ */
+const spfCache = new Map<
+  string,
+  { value: DetectorContext["spfCheck"]; expires: number }
+>();
+const SPF_CACHE_TTL_MS = 15 * 60_000;
+
 async function checkSpf(
   email: ParsedEmail,
   received: ReturnType<typeof analyzeReceivedChain>,
@@ -101,6 +114,11 @@ async function checkSpf(
   const senderForSpf = email.returnPath || email.fromAddress;
   if (!clientIp || !senderForSpf.includes("@")) return null;
 
+  const cacheKey = `${senderForSpf.split("@").pop()}|${email.senderDomain}|${clientIp}`;
+  const cached = spfCache.get(cacheKey);
+  if (cached && cached.expires > Date.now()) return cached.value;
+
+  let value: DetectorContext["spfCheck"];
   try {
     const [res, record] = await Promise.all([
       withTimeout(
@@ -122,7 +140,7 @@ async function checkSpf(
       withTimeout(getSpfRecord(email.senderDomain), 4000),
     ]);
 
-    return {
+    value = {
       result: verdict(res?.status?.result),
       domain: res?.domain ?? email.senderDomain,
       clientIp,
@@ -130,7 +148,7 @@ async function checkSpf(
       comment: typeof res?.status?.comment === "string" ? res.status.comment : null,
     };
   } catch {
-    return {
+    value = {
       result: null,
       domain: email.senderDomain,
       clientIp,
@@ -138,6 +156,42 @@ async function checkSpf(
       comment: "SPF check errored",
     };
   }
+
+  spfCache.set(cacheKey, { value, expires: Date.now() + SPF_CACHE_TTL_MS });
+  return value;
+}
+
+/** Cheap signals that something in this message is worth an LLM opinion. */
+const LLM_WORTH_IT_RE =
+  /\b(urgent|immediate|verify|suspend|password|otp|invoice|payment|wire|bank|gift card|payroll|refund|account (locked|closed|limited)|confirm your|click here|act now|final notice|as soon as possible|are you (available|at your desk))\b/i;
+
+/**
+ * Whether to spend an LLM call on this message.
+ *
+ * The deterministic layer already produces a complete score, and a provider
+ * call is by far the most expensive and most latency-variable step in the
+ * pipeline. A message that the receiving provider itself authenticated
+ * (SPF **and** DMARC pass), carries no attachments, and contains none of the
+ * language fraud actually relies on is not a case the LLM will change our
+ * mind about — so skip it and keep the scan moving. Everything else, notably
+ * anything unauthenticated (where BEC and impersonation live), still gets
+ * the full treatment.
+ *
+ * Uses only header/body data already in hand — no network — so the decision
+ * costs nothing and the LLM still starts in parallel with the SPF re-check.
+ */
+function shouldConsultLlm(
+  email: ParsedEmail,
+  authResults: ParsedAuthResults,
+): boolean {
+  if (email.attachments.length > 0) return true;
+
+  const wellAuthenticated =
+    authResults.spf === "pass" && authResults.dmarc === "pass";
+  if (!wellAuthenticated) return true;
+
+  const text = `${email.subject}\n${email.bodyText ?? email.snippet ?? ""}`;
+  return LLM_WORTH_IT_RE.test(text);
 }
 
 export async function buildContext(
@@ -148,11 +202,11 @@ export async function buildContext(
   const received = analyzeReceivedChain(email.receivedChain);
   const authResults = parseAuthenticationResults(email.authenticationResults);
 
+  const useLlm = settings.enableLlm && shouldConsultLlm(email, authResults);
+
   const [spfCheck, llm] = await Promise.all([
     checkSpf(email, received),
-    settings.enableLlm
-      ? analyzeWithLlm(email).catch(() => null)
-      : Promise.resolve(null),
+    useLlm ? analyzeWithLlm(email).catch(() => null) : Promise.resolve(null),
   ]);
 
   return {

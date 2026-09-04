@@ -5,8 +5,16 @@ import { parseEmail } from "@/server/mail/parse";
 import { persistAnalyzedEmail, loadUserSettings, type SettingsInput } from "./persist";
 import { toProgress, type ScanProgress } from "./job";
 
-const BATCH_SIZE = Math.max(1, Number(process.env.SCAN_BATCH_SIZE ?? 5));
-const SOFT_TIME_BUDGET_MS = 40_000;
+// Per-email work is I/O-bound (Gmail fetch, DNS/SPF, optional LLM call) and
+// the LLM layer already caps its own concurrency independently (see
+// FEATHERLESS_MAX_CONCURRENCY), so a larger batch buys real parallelism for
+// everything else (DNS/RDAP/geo) without over-subscribing the LLM budget.
+const BATCH_SIZE = Math.max(1, Number(process.env.SCAN_BATCH_SIZE ?? 8));
+// Throughput is set by BATCH_SIZE; this only decides how long the client
+// waits between progress updates. 40s meant one tick chewed through several
+// batches and the bar sat frozen for over a minute — same work, but it felt
+// broken. Return after roughly one batch so progress actually moves.
+const SOFT_TIME_BUDGET_MS = 12_000;
 
 /**
  * Process message-queue items for a job until the queue is empty or the soft

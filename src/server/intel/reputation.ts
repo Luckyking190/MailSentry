@@ -18,10 +18,21 @@ export type DomainReputationSnapshot = {
  * and MX hosts for a registrable domain. Used to enrich the sender domain and
  * the final hosts of expanded URLs.
  */
+const memCache = new Map<
+  string,
+  { value: DomainReputationSnapshot; expires: number }
+>();
+const MEM_TTL_MS = 15 * 60_000;
+
 export async function getDomainReputation(
   input: string,
 ): Promise<DomainReputationSnapshot> {
   const domain = (getDomain(input) ?? input).toLowerCase();
+
+  // A mailbox is dominated by repeat senders, so this saves a DB read+write
+  // round trip (~600ms) per message after the first from each domain.
+  const mem = memCache.get(domain);
+  if (mem && mem.expires > Date.now()) return mem.value;
 
   const existing = await prisma.domainReputation
     .findUnique({ where: { domain } })
@@ -30,7 +41,7 @@ export async function getDomainReputation(
     existing &&
     existing.refreshedAt.getTime() + existing.ttlSeconds * 1000 > Date.now()
   ) {
-    return {
+    const value: DomainReputationSnapshot = {
       domain,
       spfRecord: existing.spfRecord,
       dmarcPolicy: existing.dmarcPolicy,
@@ -38,6 +49,8 @@ export async function getDomainReputation(
       registrar: existing.registrar,
       mxHosts: existing.mxHosts,
     };
+    memCache.set(domain, { value, expires: Date.now() + MEM_TTL_MS });
+    return value;
   }
 
   const [spfRecord, age, dmarcTxt, mx] = await Promise.all([
@@ -90,5 +103,6 @@ export async function getDomainReputation(
     })
     .catch(() => {});
 
+  memCache.set(domain, { value: snapshot, expires: Date.now() + MEM_TTL_MS });
   return snapshot;
 }

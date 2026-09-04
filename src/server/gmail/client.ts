@@ -35,7 +35,14 @@ export async function getGmailClient(
     refresh_token: account.refresh_token ?? undefined,
     expiry_date: account.expires_at ? account.expires_at * 1000 : undefined,
     scope: account.scope ?? undefined,
-    token_type: account.token_type ?? undefined,
+    // google-auth-library builds the Authorization header as
+    // `${token_type} ${access_token}` verbatim. Google's OAuth token
+    // endpoint (via the Prisma adapter) stores this as lowercase "bearer",
+    // but the API itself matches the scheme case-sensitively and silently
+    // treats a lowercase "bearer ..." header as no credential at all
+    // (401 "missing required authentication credential"). Always use the
+    // canonical "Bearer" regardless of what was persisted.
+    token_type: "Bearer",
   });
 
   oauth2.on("tokens", (tokens) => {

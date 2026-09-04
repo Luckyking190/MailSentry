@@ -72,7 +72,7 @@ export async function persistAnalyzedEmail(
     },
   });
 
-  await prisma.$transaction([
+  const analysisWrite = prisma.$transaction([
     prisma.analysisResult.deleteMany({ where: { emailId: email.id } }),
     prisma.analysisResult.create({
       data: {
@@ -131,7 +131,7 @@ export async function persistAnalyzedEmail(
         isArchive: false,
       }));
 
-  await prisma.$transaction([
+  const artifactsWrite = prisma.$transaction([
     prisma.urlMeta.deleteMany({ where: { emailId: email.id } }),
     prisma.attachmentMeta.deleteMany({ where: { emailId: email.id } }),
     ...(urlRows.length
@@ -174,8 +174,15 @@ export async function persistAnalyzedEmail(
       : []),
   ]);
 
-  await getDomainReputation(parsed.senderDomain).catch(() => {});
-  await persistGeoIntel(email.id, parsed.receivedChain).catch(() => {});
+  // Both writes are scoped by emailId and touch disjoint tables.
+  await Promise.all([analysisWrite, artifactsWrite]);
+
+  // Independent cache/enrichment writes — run concurrently rather than
+  // serially (each is its own DNS/HTTP round trip).
+  await Promise.all([
+    getDomainReputation(parsed.senderDomain).catch(() => {}),
+    persistGeoIntel(email.id, parsed.receivedChain).catch(() => {}),
+  ]);
 
   return { emailId: email.id, band: outcome.band };
 }
