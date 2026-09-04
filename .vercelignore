@@ -1,0 +1,12 @@
+# Secrets must never be uploaded — Vercel env vars are configured in the
+# dashboard/CLI, not shipped with the source.
+.env
+.env.*
+!.env.example
+
+# Local-only artifacts
+.next
+node_modules
+scripts/bench-*.ts
+*.patch
+*.patch.bak
