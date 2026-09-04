@@ -4,7 +4,7 @@ import { authSpfDetector } from "@/server/detect/detectors/auth-spf";
 import { authDkimDmarcDetector } from "@/server/detect/detectors/auth-dkim-dmarc";
 import { senderImpersonationDetector } from "@/server/detect/detectors/sender-impersonation";
 import { lookalikeDomainDetector } from "@/server/detect/detectors/lookalike-domain";
-import { attachmentBasicDetector } from "@/server/detect/detectors/attachment-basic";
+import { attachmentAnalysisDetector } from "@/server/detect/detectors/attachment-analysis";
 import { contentHeuristicDetector } from "@/server/detect/detectors/content-heuristic";
 import { makeContext, makeEmail, makeAuthResults } from "./helpers";
 
@@ -111,7 +111,7 @@ describe("domain.lookalike", () => {
   });
 });
 
-describe("attachment.basic", () => {
+describe("attachment.analysis", () => {
   it("flags a double extension as critical", async () => {
     const ctx = makeContext({
       email: makeEmail({
@@ -121,8 +121,22 @@ describe("attachment.basic", () => {
         ],
       }),
     });
-    const r = await attachmentBasicDetector.run(ctx);
+    const r = await attachmentAnalysisDetector.run(ctx);
     expect(r.severity).toBe("critical");
+    expect(ctx.sink.attachments[0].isDoubleExt).toBe(true);
+  });
+
+  it("flags a macro-enabled document", async () => {
+    const ctx = makeContext({
+      email: makeEmail({
+        hasAttachments: true,
+        attachments: [
+          { filename: "Q3-report.xlsm", contentType: null, sizeBytes: 5000, extension: "xlsm" },
+        ],
+      }),
+    });
+    const r = await attachmentAnalysisDetector.run(ctx);
+    expect(r.triggered).toBe(true);
   });
 });
 

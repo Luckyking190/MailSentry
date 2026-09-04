@@ -30,6 +30,37 @@ export type ScoredSignal = DetectorResult & {
   contribution: number;
 };
 
+export type UrlArtifact = {
+  rawUrl: string;
+  finalUrl: string | null;
+  host: string | null;
+  scheme: string | null;
+  anchorText: string | null;
+  anchorMismatch: boolean;
+  isShortener: boolean;
+  isPunycode: boolean;
+  redirectChain: unknown[];
+  lengthScore: number | null;
+  entropyScore: number | null;
+  domainAgeDays: number | null;
+  verdict: "safe" | "suspicious" | "malicious" | "unknown" | null;
+};
+
+export type AttachmentArtifact = {
+  filename: string;
+  contentType: string | null;
+  sizeBytes: number | null;
+  extension: string | null;
+  isHighRisk: boolean;
+  isDoubleExt: boolean;
+  isArchive: boolean;
+};
+
+export type ArtifactSink = {
+  urls: UrlArtifact[];
+  attachments: AttachmentArtifact[];
+};
+
 export type AnalysisOutcome = {
   score: number;
   band: RiskBand;
@@ -39,6 +70,7 @@ export type AnalysisOutcome = {
   engineVersion: string;
   llmModel?: string | null;
   llmDegraded?: boolean;
+  artifacts: ArtifactSink;
 };
 
 /** SPF/DKIM/DMARC verdicts as parsed from a provider-stamped Authentication-Results. */
@@ -76,6 +108,8 @@ export type DetectorContext = {
   userId: string;
   settings: ResolvedSettings;
   received: ReceivedChain;
+  /** Detectors push enriched URL / attachment rows here; the worker persists them. */
+  sink: ArtifactSink;
   /** Provider-stamped Authentication-Results, parsed. */
   authResults: ParsedAuthResults;
   /** Our own SPF re-check against DNS + the originating IP. */

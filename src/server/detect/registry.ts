@@ -5,8 +5,8 @@ import { authDkimDmarcDetector } from "./detectors/auth-dkim-dmarc";
 import { senderImpersonationDetector } from "./detectors/sender-impersonation";
 import { lookalikeDomainDetector } from "./detectors/lookalike-domain";
 import { headerAnomalyDetector } from "./detectors/header-anomaly";
-import { attachmentBasicDetector } from "./detectors/attachment-basic";
-import { urlBasicDetector } from "./detectors/url-basic";
+import { attachmentAnalysisDetector } from "./detectors/attachment-analysis";
+import { urlAnalysisDetector } from "./detectors/url-analysis";
 import { contentHeuristicDetector } from "./detectors/content-heuristic";
 
 /** Ordered detector list. LLM-backed detectors are appended in Phase 5. */
@@ -16,8 +16,8 @@ export const DETERMINISTIC_DETECTORS: Detector[] = [
   senderImpersonationDetector,
   lookalikeDomainDetector,
   headerAnomalyDetector,
-  attachmentBasicDetector,
-  urlBasicDetector,
+  attachmentAnalysisDetector,
+  urlAnalysisDetector,
   contentHeuristicDetector,
 ];
 

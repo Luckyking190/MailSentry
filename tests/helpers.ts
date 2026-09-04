@@ -69,5 +69,6 @@ export function makeContext(
     received: over.received ?? analyzeReceivedChain(email.receivedChain),
     authResults: over.authResults ?? makeAuthResults(),
     spfCheck: over.spfCheck ?? null,
+    sink: over.sink ?? { urls: [], attachments: [] },
   };
 }

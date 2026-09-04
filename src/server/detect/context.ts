@@ -147,5 +147,13 @@ export async function buildContext(
     }
   }
 
-  return { email, userId, settings, received, authResults, spfCheck };
+  return {
+    email,
+    userId,
+    settings,
+    received,
+    authResults,
+    spfCheck,
+    sink: { urls: [], attachments: [] },
+  };
 }

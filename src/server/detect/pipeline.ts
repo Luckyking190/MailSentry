@@ -49,6 +49,7 @@ export async function runPipeline(
     summary,
     signals,
     engineVersion: ENGINE_VERSION,
+    artifacts: ctx.sink,
   };
 }
 

@@ -5,6 +5,7 @@ import { getGmailClient } from "@/server/gmail/client";
 import { fetchRawMessage } from "@/server/gmail/fetchRaw";
 import { parseEmail } from "@/server/mail/parse";
 import { runPipeline } from "@/server/detect/pipeline";
+import { getDomainReputation } from "@/server/intel/reputation";
 import { toProgress, type ScanProgress } from "./job";
 
 type SettingsInput = {
@@ -161,37 +162,81 @@ async function processOne(
     }),
   ]);
 
-  // Persist lightweight URL / attachment rows (fuller analysis in Phase 4).
+  // Persist enriched URL / attachment rows produced by the pipeline.
+  const urlRows = outcome.artifacts.urls.length
+    ? outcome.artifacts.urls
+    : parsed.urls.slice(0, 50).map((u) => ({
+        rawUrl: u.rawUrl,
+        finalUrl: null,
+        host: u.host,
+        scheme: u.scheme,
+        anchorText: u.anchorText,
+        anchorMismatch: false,
+        isShortener: false,
+        isPunycode: false,
+        redirectChain: [] as unknown[],
+        lengthScore: null,
+        entropyScore: null,
+        domainAgeDays: null,
+        verdict: null,
+      }));
+  const attRows = outcome.artifacts.attachments.length
+    ? outcome.artifacts.attachments
+    : parsed.attachments.map((a) => ({
+        filename: a.filename,
+        contentType: a.contentType,
+        sizeBytes: a.sizeBytes,
+        extension: a.extension,
+        isHighRisk: false,
+        isDoubleExt: false,
+        isArchive: false,
+      }));
+
   await prisma.$transaction([
     prisma.urlMeta.deleteMany({ where: { emailId: email.id } }),
     prisma.attachmentMeta.deleteMany({ where: { emailId: email.id } }),
-    ...(parsed.urls.length
+    ...(urlRows.length
       ? [
           prisma.urlMeta.createMany({
-            data: parsed.urls.slice(0, 50).map((u) => ({
+            data: urlRows.slice(0, 50).map((u) => ({
               emailId: email.id,
               rawUrl: u.rawUrl,
-              host: u.host,
-              scheme: u.scheme,
-              anchorText: u.anchorText,
+              finalUrl: u.finalUrl ?? null,
+              host: u.host ?? null,
+              scheme: u.scheme ?? null,
+              anchorText: u.anchorText ?? null,
+              anchorMismatch: u.anchorMismatch ?? false,
+              isShortener: u.isShortener ?? false,
+              isPunycode: u.isPunycode ?? false,
+              redirectChain: (u.redirectChain ?? []) as object,
+              lengthScore: u.lengthScore ?? null,
+              entropyScore: u.entropyScore ?? null,
+              domainAgeDays: u.domainAgeDays ?? null,
+              verdict: u.verdict ?? null,
             })),
           }),
         ]
       : []),
-    ...(parsed.attachments.length
+    ...(attRows.length
       ? [
           prisma.attachmentMeta.createMany({
-            data: parsed.attachments.map((a) => ({
+            data: attRows.map((a) => ({
               emailId: email.id,
               filename: a.filename,
-              contentType: a.contentType,
-              sizeBytes: a.sizeBytes,
-              extension: a.extension,
+              contentType: a.contentType ?? null,
+              sizeBytes: a.sizeBytes ?? null,
+              extension: a.extension ?? null,
+              isHighRisk: a.isHighRisk ?? false,
+              isDoubleExt: a.isDoubleExt ?? false,
+              isArchive: a.isArchive ?? false,
             })),
           }),
         ]
       : []),
   ]);
+
+  // Populate the shared domain-reputation cache (best effort; cached).
+  await getDomainReputation(parsed.senderDomain).catch(() => {});
 
   return outcome.band;
 }
