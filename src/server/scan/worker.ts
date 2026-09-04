@@ -5,15 +5,15 @@ import { parseEmail } from "@/server/mail/parse";
 import { persistAnalyzedEmail, loadUserSettings, type SettingsInput } from "./persist";
 import { toProgress, type ScanProgress } from "./job";
 
-// Per-email work is I/O-bound (Gmail fetch, DNS/SPF, optional LLM call) and
-// the LLM layer already caps its own concurrency independently (see
-// FEATHERLESS_MAX_CONCURRENCY), so a larger batch buys real parallelism for
-// everything else (DNS/RDAP/geo) without over-subscribing the LLM budget.
-const BATCH_SIZE = Math.max(1, Number(process.env.SCAN_BATCH_SIZE ?? 8));
-// Throughput is set by BATCH_SIZE; this only decides how long the client
-// waits between progress updates. 40s meant one tick chewed through several
-// batches and the bar sat frozen for over a minute — same work, but it felt
-// broken. Return after roughly one batch so progress actually moves.
+// Per-email work is almost entirely I/O — Gmail fetch, DNS/SPF, Neon writes,
+// and an occasional LLM call — so concurrency is bounded by the slowest
+// dependency, not by CPU. The LLM layer caps itself separately (see
+// FEATHERLESS_MAX_CONCURRENCY), so this only governs fetch/DNS/DB overlap.
+const CONCURRENCY = Math.max(1, Number(process.env.SCAN_CONCURRENCY ?? 16));
+/** How many completions to accumulate before writing progress back to the DB. */
+const PROGRESS_EVERY = 8;
+// Only decides how long the client waits between progress updates; throughput
+// is set by CONCURRENCY. 40s meant the bar sat frozen for over a minute.
 const SOFT_TIME_BUDGET_MS = 12_000;
 
 /**
@@ -30,7 +30,7 @@ export async function tickScan(
   if (!job) throw new Error("Scan job not found");
   if (job.phase === "DONE" || job.phase === "FAILED") return toProgress(job);
 
-  let queue = (job.messageQueue as string[]) ?? [];
+  const queue = [...((job.messageQueue as string[]) ?? [])];
   const histogram: Record<string, number> = {
     ...((job.bandHistogram as Record<string, number>) ?? {}),
   };
@@ -42,36 +42,55 @@ export async function tickScan(
     loadUserSettings(userId),
   ]);
 
-  while (queue.length > 0 && Date.now() - started < SOFT_TIME_BUDGET_MS) {
-    const batch = queue.slice(0, BATCH_SIZE);
-    queue = queue.slice(BATCH_SIZE);
+  // A sliding pool, not fixed batches. Per-email cost is very uneven (a
+  // message with links and a cold RDAP lookup can take 20x the median), and a
+  // batch barrier made every worker wait on the slowest member of its group.
+  // Here a finished worker takes the next id immediately.
+  const inProgress = new Set<string>();
+  let sinceFlush = 0;
 
-    const outcomes = await Promise.allSettled(
-      batch.map((id) => processOne(userId, job!.id, gmail, settings, id)),
-    );
-
-    for (const o of outcomes) {
-      if (o.status === "fulfilled") {
-        processed += 1;
-        histogram[o.value] = (histogram[o.value] ?? 0) + 1;
-      } else {
-        failed += 1;
-      }
-    }
-
+  const flush = async () => {
+    sinceFlush = 0;
     job = await prisma.scanJob.update({
-      where: { id: job.id },
+      where: { id: job!.id },
       data: {
-        messageQueue: queue,
+        // Anything still in flight stays on the persisted queue, so a crash
+        // mid-tick resumes it. Upserts make re-processing a no-op. By the
+        // final flush every pump has drained, so this is just `queue`.
+        messageQueue: [...queue, ...inProgress],
         processed,
         failed,
         bandHistogram: histogram,
-        phase: queue.length ? "ANALYZING" : "DONE",
-        finishedAt: queue.length ? null : new Date(),
+        phase: queue.length || inProgress.size ? "ANALYZING" : "DONE",
+        finishedAt: queue.length || inProgress.size ? null : new Date(),
       },
     });
+  };
+
+  const outOfTime = () => Date.now() - started >= SOFT_TIME_BUDGET_MS;
+
+  async function pump() {
+    while (queue.length > 0 && !outOfTime()) {
+      const id = queue.shift()!;
+      inProgress.add(id);
+      try {
+        const band = await processOne(userId, job!.id, gmail, settings, id);
+        processed += 1;
+        histogram[band] = (histogram[band] ?? 0) + 1;
+      } catch {
+        failed += 1;
+      } finally {
+        inProgress.delete(id);
+      }
+      if (++sinceFlush >= PROGRESS_EVERY) await flush();
+    }
   }
 
+  await Promise.all(
+    Array.from({ length: Math.min(CONCURRENCY, queue.length) }, pump),
+  );
+
+  await flush();
   return toProgress(job);
 }
 

@@ -72,9 +72,12 @@ export async function persistAnalyzedEmail(
     },
   });
 
-  const analysisWrite = prisma.$transaction([
-    prisma.analysisResult.deleteMany({ where: { emailId: email.id } }),
-    prisma.analysisResult.create({
+  // Nested `signals: { create: [...] }` issues one INSERT per signal — 11
+  // detectors meant 11 round trips to Neon inside a transaction. createMany
+  // writes them in one statement instead.
+  const analysisWrite = (async () => {
+    await prisma.analysisResult.deleteMany({ where: { emailId: email.id } });
+    const analysis = await prisma.analysisResult.create({
       data: {
         emailId: email.id,
         score: outcome.score,
@@ -84,23 +87,27 @@ export async function persistAnalyzedEmail(
         engineVersion: outcome.engineVersion,
         llmModel: outcome.llmModel ?? null,
         llmDegraded: outcome.llmDegraded ?? false,
-        signals: {
-          create: outcome.signals.map((s) => ({
-            detectorId: s.detectorId,
-            category: s.category,
-            triggered: s.triggered,
-            rawScore: s.score,
-            confidence: s.confidence,
-            weight: s.weight,
-            contribution: s.contribution,
-            severity: s.severity,
-            evidence: s.evidence,
-            tags: s.tags ?? [],
-          })),
-        },
       },
-    }),
-  ]);
+      select: { id: true },
+    });
+    if (outcome.signals.length) {
+      await prisma.signal.createMany({
+        data: outcome.signals.map((s) => ({
+          analysisId: analysis.id,
+          detectorId: s.detectorId,
+          category: s.category,
+          triggered: s.triggered,
+          rawScore: s.score,
+          confidence: s.confidence,
+          weight: s.weight,
+          contribution: s.contribution,
+          severity: s.severity,
+          evidence: s.evidence,
+          tags: s.tags ?? [],
+        })),
+      });
+    }
+  })();
 
   const urlRows = outcome.artifacts.urls.length
     ? outcome.artifacts.urls
@@ -131,55 +138,62 @@ export async function persistAnalyzedEmail(
         isArchive: false,
       }));
 
-  const artifactsWrite = prisma.$transaction([
-    prisma.urlMeta.deleteMany({ where: { emailId: email.id } }),
-    prisma.attachmentMeta.deleteMany({ where: { emailId: email.id } }),
-    ...(urlRows.length
-      ? [
-          prisma.urlMeta.createMany({
-            data: urlRows.slice(0, 50).map((u) => ({
-              emailId: email.id,
-              rawUrl: u.rawUrl,
-              finalUrl: u.finalUrl ?? null,
-              host: u.host ?? null,
-              scheme: u.scheme ?? null,
-              anchorText: u.anchorText ?? null,
-              anchorMismatch: u.anchorMismatch ?? false,
-              isShortener: u.isShortener ?? false,
-              isPunycode: u.isPunycode ?? false,
-              redirectChain: (u.redirectChain ?? []) as object,
-              lengthScore: u.lengthScore ?? null,
-              entropyScore: u.entropyScore ?? null,
-              domainAgeDays: u.domainAgeDays ?? null,
-              verdict: u.verdict ?? null,
-            })),
-          }),
-        ]
-      : []),
-    ...(attRows.length
-      ? [
-          prisma.attachmentMeta.createMany({
-            data: attRows.map((a) => ({
-              emailId: email.id,
-              filename: a.filename,
-              contentType: a.contentType ?? null,
-              sizeBytes: a.sizeBytes ?? null,
-              extension: a.extension ?? null,
-              isHighRisk: a.isHighRisk ?? false,
-              isDoubleExt: a.isDoubleExt ?? false,
-              isArchive: a.isArchive ?? false,
-            })),
-          }),
-        ]
-      : []),
-  ]);
+  // Not a transaction: these are a delete-then-insert of derived rows for one
+  // email, and the scan is idempotent — a partial write is corrected by the
+  // next scan. Sequential transactions cost a BEGIN/COMMIT round trip each and
+  // serialised what can simply run concurrently.
+  const artifactsWrite = (async () => {
+    await Promise.all([
+      prisma.urlMeta.deleteMany({ where: { emailId: email.id } }),
+      prisma.attachmentMeta.deleteMany({ where: { emailId: email.id } }),
+    ]);
+    await Promise.all([
+      ...(urlRows.length
+        ? [
+            prisma.urlMeta.createMany({
+              data: urlRows.slice(0, 50).map((u) => ({
+                emailId: email.id,
+                rawUrl: u.rawUrl,
+                finalUrl: u.finalUrl ?? null,
+                host: u.host ?? null,
+                scheme: u.scheme ?? null,
+                anchorText: u.anchorText ?? null,
+                anchorMismatch: u.anchorMismatch ?? false,
+                isShortener: u.isShortener ?? false,
+                isPunycode: u.isPunycode ?? false,
+                redirectChain: (u.redirectChain ?? []) as object,
+                lengthScore: u.lengthScore ?? null,
+                entropyScore: u.entropyScore ?? null,
+                domainAgeDays: u.domainAgeDays ?? null,
+                verdict: u.verdict ?? null,
+              })),
+            }),
+          ]
+        : []),
+      ...(attRows.length
+        ? [
+            prisma.attachmentMeta.createMany({
+              data: attRows.map((a) => ({
+                emailId: email.id,
+                filename: a.filename,
+                contentType: a.contentType ?? null,
+                sizeBytes: a.sizeBytes ?? null,
+                extension: a.extension ?? null,
+                isHighRisk: a.isHighRisk ?? false,
+                isDoubleExt: a.isDoubleExt ?? false,
+                isArchive: a.isArchive ?? false,
+              })),
+            }),
+          ]
+        : []),
+    ]);
+  })();
 
-  // Both writes are scoped by emailId and touch disjoint tables.
-  await Promise.all([analysisWrite, artifactsWrite]);
-
-  // Independent cache/enrichment writes — run concurrently rather than
-  // serially (each is its own DNS/HTTP round trip).
+  // Every remaining write is scoped by emailId and touches a disjoint table,
+  // so the round trips overlap instead of stacking.
   await Promise.all([
+    analysisWrite,
+    artifactsWrite,
     getDomainReputation(parsed.senderDomain).catch(() => {}),
     persistGeoIntel(email.id, parsed.receivedChain).catch(() => {}),
   ]);
@@ -197,32 +211,30 @@ async function persistGeoIntel(
 
   const geos = await geolocateMany(publicHops.map((h) => h.fromIp!));
 
-  await prisma.$transaction([
-    prisma.geoIntel.deleteMany({ where: { emailId } }),
-    prisma.geoIntel.createMany({
-      data: publicHops.map((h) => {
-        const g = geos.get(h.fromIp!);
-        return {
-          emailId,
-          hopIndex: h.index,
-          ip: h.fromIp!,
-          isTrustedOrigin: originHop?.index === h.index,
-          ptr: g?.ptr ?? null,
-          country: g?.country ?? null,
-          region: g?.region ?? null,
-          city: g?.city ?? null,
-          lat: g?.lat ?? null,
-          lon: g?.lon ?? null,
-          asn: g?.asn ?? null,
-          org: g?.org ?? null,
-          timestamp: h.timestamp,
-          byHost: h.byHost,
-          fromHost: h.fromHost,
-          provider: g?.provider ?? "unknown",
-        };
-      }),
+  await prisma.geoIntel.deleteMany({ where: { emailId } });
+  await prisma.geoIntel.createMany({
+    data: publicHops.map((h) => {
+      const g = geos.get(h.fromIp!);
+      return {
+        emailId,
+        hopIndex: h.index,
+        ip: h.fromIp!,
+        isTrustedOrigin: originHop?.index === h.index,
+        ptr: g?.ptr ?? null,
+        country: g?.country ?? null,
+        region: g?.region ?? null,
+        city: g?.city ?? null,
+        lat: g?.lat ?? null,
+        lon: g?.lon ?? null,
+        asn: g?.asn ?? null,
+        org: g?.org ?? null,
+        timestamp: h.timestamp,
+        byHost: h.byHost,
+        fromHost: h.fromHost,
+        provider: g?.provider ?? "unknown",
+      };
     }),
-  ]);
+  });
 }
 
 export async function loadUserSettings(userId: string): Promise<SettingsInput> {
