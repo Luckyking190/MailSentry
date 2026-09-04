@@ -4,7 +4,7 @@
 >
 > | Phase | Title | State |
 > |---|---|---|
-> | 1 | Scaffold, deploy, auth | 🚧 in progress |
+> | 1 | Scaffold, deploy, auth | ✅ code complete — build + typecheck green; deploy/login pending Neon + Google OAuth credentials |
 > | 2 | Gmail ingest + minimal analysis + dashboard (vertical slice) | ⬜ not started |
 > | 3 | Detector framework + deterministic detectors | ⬜ not started |
 > | 4 | URL + attachment analysis + domain intel (RDAP) | ⬜ not started |
