@@ -18,12 +18,16 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
     <main className="bg-grid flex flex-1 items-center justify-center px-6 py-16">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center text-center">
-          <Logo withText={false} className="mb-4 scale-150" />
-          <h1 className="text-xl font-semibold tracking-tight">{APP_NAME}</h1>
-          <p className="mt-1 text-sm text-muted">{APP_TAGLINE}</p>
+          <span className="mb-5 flex size-14 items-center justify-center rounded-2xl border border-border bg-surface shadow-lg shadow-brand/10">
+            <Logo withText={false} className="scale-125" />
+          </span>
+          <h1 className="bg-gradient-to-b from-foreground to-muted bg-clip-text text-2xl font-semibold tracking-tight text-transparent">
+            {APP_NAME}
+          </h1>
+          <p className="mt-1.5 text-sm text-muted">{APP_TAGLINE}</p>
         </div>
 
-        <div className="rounded-xl border border-border bg-surface p-6">
+        <div className="sheen rounded-2xl border border-border bg-surface/80 p-6 shadow-2xl shadow-black/40 backdrop-blur">
           <p className="mb-5 text-sm text-muted">
             Connect your Google account to let {APP_NAME} read and score your
             inbox for phishing, spoofing, and Business Email Compromise. Access is{" "}
@@ -58,9 +62,20 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
           )}
         </div>
 
-        <p className="mt-6 text-center text-xs text-muted">
-          SIH26106 · Built for the Smart India Hackathon
-        </p>
+        <div className="mt-6 flex flex-col items-center gap-2">
+          <div className="flex items-center gap-3 text-[11px] text-muted/70">
+            <span>Phishing</span>
+            <span className="size-1 rounded-full bg-border-strong" />
+            <span>Spoofing</span>
+            <span className="size-1 rounded-full bg-border-strong" />
+            <span>BEC</span>
+            <span className="size-1 rounded-full bg-border-strong" />
+            <span>Geolocation</span>
+          </div>
+          <p className="text-center text-xs text-muted/60">
+            SIH26106 · Built for the Smart India Hackathon
+          </p>
+        </div>
       </div>
     </main>
   );

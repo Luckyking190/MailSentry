@@ -119,10 +119,13 @@ export default async function MailPage(props: PageProps<"/mail">) {
               {[...byDomain.entries()].map(([domain, list]) => (
                 <Card key={domain} className="overflow-hidden">
                   <details open={byDomain.size <= 8}>
-                    <summary className="cursor-pointer list-none px-5 py-3 hover:bg-surface-2">
-                      <span className="font-mono text-xs text-muted">{domain}</span>
-                      <span className="ml-2 text-xs text-muted/70">
-                        ({list.length})
+                    <summary className="flex cursor-pointer list-none items-center gap-2 px-5 py-3 transition-colors hover:bg-surface-2">
+                      <span className="size-1.5 shrink-0 rounded-full bg-brand/60" />
+                      <span className="truncate font-mono text-xs text-foreground">
+                        {domain}
+                      </span>
+                      <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] tnum text-muted">
+                        {list.length}
                       </span>
                     </summary>
                     <CardBody className="pt-0">
@@ -131,7 +134,7 @@ export default async function MailPage(props: PageProps<"/mail">) {
                           <li key={e.id}>
                             <Link
                               href={`/mail/${e.id}`}
-                              className="flex items-center justify-between gap-3 py-2 text-sm hover:text-brand"
+                              className="-mx-2 flex items-center justify-between gap-3 rounded-lg px-2 py-2.5 text-sm transition-colors hover:bg-surface-2"
                             >
                               <span className="min-w-0 flex-1 truncate">
                                 {e.isUnread && (
@@ -144,7 +147,7 @@ export default async function MailPage(props: PageProps<"/mail">) {
                               </span>
                               {e.priorityScore != null && (
                                 <span
-                                  className="hidden shrink-0 text-xs tabular-nums text-muted/70 md:inline"
+                                  className="hidden shrink-0 rounded-md bg-surface-2 px-1.5 py-0.5 text-[10px] tnum text-muted md:inline"
                                   title={`Priority ${e.priorityScore}/100 — learned from how often you read ${e.senderDomain}, plus recency and risk`}
                                 >
                                   P{e.priorityScore}

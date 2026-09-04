@@ -2,25 +2,44 @@
 
 /* MailSentry — dark "security console" theme */
 :root {
-  --background: #0a0b0f;
-  --surface: #12141b;
-  --surface-2: #171a22;
-  --border: #262b36;
-  --foreground: #e7e9ee;
-  --muted: #9aa1ad;
+  --background: #08090d;
+  --surface: #101219;
+  --surface-2: #171a23;
+  --surface-3: #1d212b;
+  --border: #242936;
+  --border-strong: #333a4a;
+  --foreground: #e9ebf0;
+  --muted: #99a1af;
   --brand: #6366f1;
+  --brand-soft: #818cf8;
   --brand-fg: #ffffff;
+
+  /* Risk ramp — shared by badges, bars and gauges so a colour always means
+     the same band no matter which component draws it. */
+  --safe: #34d399;
+  --low: #60a5fa;
+  --medium: #fbbf24;
+  --high: #fb923c;
+  --critical: #f43f5e;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
   --color-brand: var(--brand);
+  --color-brand-soft: var(--brand-soft);
   --color-brand-fg: var(--brand-fg);
+  --color-safe: var(--safe);
+  --color-low: var(--low);
+  --color-medium: var(--medium);
+  --color-high: var(--high);
+  --color-critical: var(--critical);
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
@@ -34,6 +53,20 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  /* Two very wide, very dim radial washes keep large dark areas from reading
+     as flat black without adding a visible gradient band. */
+  background-image:
+    radial-gradient(
+      1200px 600px at 12% -10%,
+      color-mix(in oklab, var(--brand) 10%, transparent),
+      transparent 60%
+    ),
+    radial-gradient(
+      900px 500px at 100% 0%,
+      color-mix(in oklab, #0ea5e9 6%, transparent),
+      transparent 60%
+    );
+  background-attachment: fixed;
 }
 
 /* Subtle grid backdrop for console surfaces */
@@ -58,8 +91,45 @@ body {
   font-size: 0.8rem;
   color: var(--foreground);
   width: 100%;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+.input:hover {
+  border-color: var(--border-strong);
 }
 .input:focus {
   outline: 2px solid var(--brand);
   outline-offset: -1px;
+}
+
+/* Numbers that shouldn't jitter as they count up during a scan. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Card sheen: a single hairline highlight along the top edge. Cheap, and it
+   separates stacked panels far better than another border would. */
+.sheen {
+  position: relative;
+}
+.sheen::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    color-mix(in oklab, var(--foreground) 12%, transparent),
+    transparent
+  );
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

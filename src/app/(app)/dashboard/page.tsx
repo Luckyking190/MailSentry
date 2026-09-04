@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { RiskBadge } from "@/components/RiskBadge";
 import { Filters, type FilterValues } from "@/components/Filters";
 import { ScanRunner } from "@/components/ScanRunner";
+import { StatTile } from "@/components/StatTile";
 import { NewMailWatcher } from "@/components/NewMailWatcher";
 import { getActiveOrLatestJob, toProgress } from "@/server/scan/job";
 import { BAND_ORDER, BAND_META, SIGNAL_CATEGORIES } from "@/lib/scoring";
@@ -130,94 +131,113 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
       {/* Polls Gmail for arrivals and runs them through the same pipeline. */}
       {!activeJob && total > 0 && <NewMailWatcher />}
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Card>
-          <CardBody>
-            <p className="text-xs text-muted">Emails analyzed</p>
-            <p className="mt-1 text-2xl font-semibold tabular-nums">{total}</p>
-          </CardBody>
-        </Card>
-        <Card>
-          <CardBody>
-            <p className="text-xs text-muted">Flagged (medium+)</p>
-            <p className="mt-1 text-2xl font-semibold tabular-nums text-orange-300">
-              {flagged}
-            </p>
-          </CardBody>
-        </Card>
-        <Card>
-          <CardBody>
-            <p className="text-xs text-muted">Critical</p>
-            <p className="mt-1 text-2xl font-semibold tabular-nums text-rose-300">
-              {counts.CRITICAL ?? 0}
-            </p>
-          </CardBody>
-        </Card>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatTile label="Emails analyzed" value={total} tone="neutral" />
+        <StatTile
+          label="Clean"
+          value={(counts.SAFE ?? 0) + (counts.LOW ?? 0)}
+          tone="good"
+          hint="safe or low risk"
+        />
+        <StatTile
+          label="Flagged"
+          value={flagged}
+          tone="warn"
+          hint="medium and above"
+        />
+        <StatTile
+          label="Critical"
+          value={counts.CRITICAL ?? 0}
+          tone="danger"
+          hint="needs attention now"
+        />
       </div>
 
-      <div className="mt-4">
-        <Card>
+      {/* Risk mix and origin geography answer two different questions, so they
+          sit side by side rather than stacked a screen apart. */}
+      <div className="mt-3 grid gap-3 lg:grid-cols-2">
+        <Card className="sheen">
           <CardBody>
-            <p className="mb-3 text-xs text-muted">Risk distribution</p>
-            <div className="flex flex-col gap-2">
+            <p className="mb-4 text-xs font-medium text-muted">Risk distribution</p>
+            <div className="flex flex-col gap-2.5">
               {BAND_ORDER.map((bandKey) => {
                 const c = counts[bandKey] ?? 0;
                 const pct = total ? Math.round((c / total) * 100) : 0;
                 return (
                   <div key={bandKey} className="flex items-center gap-3 text-xs">
-                    <span className="w-16 text-muted">{BAND_META[bandKey].label}</span>
-                    <span className="h-2 flex-1 overflow-hidden rounded-full bg-surface-2">
+                    <span className="w-16 shrink-0 text-muted">
+                      {BAND_META[bandKey].label}
+                    </span>
+                    <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2">
                       <span
-                        className={`block h-full ${BAND_META[bandKey].dot}`}
+                        className={`block h-full rounded-full ${BAND_META[bandKey].dot}`}
                         style={{ width: `${pct}%` }}
                       />
                     </span>
-                    <span className="w-10 text-right tabular-nums text-muted">{c}</span>
+                    <span className="w-12 shrink-0 text-right tnum text-muted">
+                      {c}
+                      <span className="ml-1 text-muted/50">{pct}%</span>
+                    </span>
                   </div>
                 );
               })}
             </div>
           </CardBody>
         </Card>
-      </div>
 
-      {geoTotal > 0 && (
-        <div className="mt-4">
-          <Card>
-            <CardBody>
-              <div className="mb-3 flex items-baseline justify-between">
-                <p className="text-xs text-muted">Top incoming mail locations</p>
-                <p className="text-xs text-muted/70">
-                  origin of {geoTotal} geolocated {geoTotal === 1 ? "email" : "emails"}
+        <Card className="sheen">
+          <CardBody>
+            <div className="mb-4 flex items-baseline justify-between gap-2">
+              <p className="text-xs font-medium text-muted">
+                Top incoming mail locations
+              </p>
+              {geoTotal > 0 && (
+                <p className="shrink-0 text-[11px] text-muted/60">
+                  {geoTotal} geolocated
                 </p>
-              </div>
-              <div className="flex flex-col gap-2">
+              )}
+            </div>
+            {geoTotal === 0 ? (
+              <p className="py-6 text-center text-xs text-muted/70">
+                No origin geography yet — it is resolved from each message&apos;s
+                earliest trusted mail server during a scan.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-2.5">
                 {byCountry.map((row) => {
                   const count = row._count._all;
                   const pct = Math.round((count / geoTotal) * 100);
                   return (
                     <div key={row.country} className="flex items-center gap-3 text-xs">
-                      <span className="w-40 truncate" title={countryName(row.country)}>
-                        <span aria-hidden>{countryFlag(row.country)}</span>{" "}
-                        <span className="text-muted">{countryName(row.country)}</span>
+                      <span
+                        className="flex w-36 shrink-0 items-center gap-1.5 truncate"
+                        title={countryName(row.country)}
+                      >
+                        <span aria-hidden className="text-sm leading-none">
+                          {countryFlag(row.country)}
+                        </span>
+                        <span className="truncate text-muted">
+                          {countryName(row.country)}
+                        </span>
                       </span>
-                      <span className="h-2 flex-1 overflow-hidden rounded-full bg-surface-2">
+                      <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2">
                         <span
-                          className="block h-full bg-brand"
+                          className="block h-full rounded-full bg-gradient-to-r from-brand to-brand-soft"
                           style={{ width: `${pct}%` }}
                         />
                       </span>
-                      <span className="w-10 text-right tabular-nums text-muted">
+                      <span className="w-12 shrink-0 text-right tnum text-muted">
                         {count}
+                        <span className="ml-1 text-muted/50">{pct}%</span>
                       </span>
                     </div>
                   );
                 })}
               </div>
-            </CardBody>
-          </Card>
-        </div>
-      )}
+            )}
+          </CardBody>
+        </Card>
+      </div>
 
       {total === 0 ? (
         <div className="mt-4">

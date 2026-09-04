@@ -120,16 +120,12 @@ export function ScanRunner({
   }, [router]);
 
   const start = useCallback(
-    async (force = false) => {
+    async () => {
       if (mode === "demo") return loadDemo();
       setError(null);
-      // Default start is incremental (new arrivals only); the Re-scan button
-      // asks for the whole window again.
-      const res = await fetch("/api/scan/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ full: force }),
-      });
+      // Scanning is always incremental: the queue holds only mail that has not
+      // been analyzed yet, so there is nothing a "re-scan" would usefully redo.
+      const res = await fetch("/api/scan/start", { method: "POST" });
       const data = (await res.json()) as Progress & { error?: string };
       if (!res.ok) {
         setError(
@@ -141,7 +137,6 @@ export function ScanRunner({
       }
       setProgress(data);
       if (!data.done) void runLoop(data.jobId);
-      else if (force) void runLoop(data.jobId);
     },
     [runLoop, mode, loadDemo],
   );
@@ -249,7 +244,7 @@ export function ScanRunner({
             <p className="rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-300 ring-1 ring-rose-500/30">
               {error ?? progress?.error ?? "Something went wrong."}
             </p>
-            <Button size="sm" onClick={() => start(true)}>
+            <Button size="sm" onClick={() => void start()}>
               Retry
             </Button>
           </div>
@@ -258,17 +253,9 @@ export function ScanRunner({
         {isDone && (
           <div className="mt-5">
             <BandBars histogram={progress!.bandHistogram} total={progress!.total} />
-            <div className="mt-4 flex gap-2">
+            <div className="mt-4">
               <Button size="sm" onClick={() => router.push("/dashboard")}>
                 View dashboard
-              </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => start(true)}
-                disabled={running}
-              >
-                Re-scan
               </Button>
             </div>
           </div>
