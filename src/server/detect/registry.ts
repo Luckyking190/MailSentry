@@ -8,8 +8,10 @@ import { headerAnomalyDetector } from "./detectors/header-anomaly";
 import { attachmentAnalysisDetector } from "./detectors/attachment-analysis";
 import { urlAnalysisDetector } from "./detectors/url-analysis";
 import { contentHeuristicDetector } from "./detectors/content-heuristic";
+import { nlpContentDetector } from "./detectors/nlp-content";
+import { becClassifierDetector } from "./detectors/bec-classifier";
+import { socialEngineeringDetector } from "./detectors/social-engineering";
 
-/** Ordered detector list. LLM-backed detectors are appended in Phase 5. */
 export const DETERMINISTIC_DETECTORS: Detector[] = [
   authSpfDetector,
   authDkimDmarcDetector,
@@ -21,6 +23,18 @@ export const DETERMINISTIC_DETECTORS: Detector[] = [
   contentHeuristicDetector,
 ];
 
+/** Featherless-backed; no-op (untriggered) when the LLM layer is disabled. */
+export const LLM_DETECTORS: Detector[] = [
+  nlpContentDetector,
+  becClassifierDetector,
+  socialEngineeringDetector,
+];
+
+export const ALL_DETECTORS: Detector[] = [
+  ...DETERMINISTIC_DETECTORS,
+  ...LLM_DETECTORS,
+];
+
 export const DEFAULT_WEIGHTS: Record<string, number> = Object.fromEntries(
-  DETERMINISTIC_DETECTORS.map((d) => [d.id, d.defaultWeight]),
+  ALL_DETECTORS.map((d) => [d.id, d.defaultWeight]),
 );

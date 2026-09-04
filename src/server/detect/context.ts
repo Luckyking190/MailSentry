@@ -3,6 +3,7 @@ import { spf as mailauthSpf } from "mailauth";
 import type { ParsedEmail } from "@/server/mail/types";
 import { analyzeReceivedChain } from "@/server/intel/received-chain";
 import { getSpfRecord, mailauthResolver } from "@/server/intel/dns";
+import { analyzeWithLlm } from "@/server/llm/analyze";
 import { DEFAULT_BAND_THRESHOLDS, type BandThresholds } from "@/lib/scoring";
 import type {
   AuthVerdict,
@@ -92,6 +93,53 @@ async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
   ]);
 }
 
+async function checkSpf(
+  email: ParsedEmail,
+  received: ReturnType<typeof analyzeReceivedChain>,
+): Promise<DetectorContext["spfCheck"]> {
+  const clientIp = received.originIp;
+  const senderForSpf = email.returnPath || email.fromAddress;
+  if (!clientIp || !senderForSpf.includes("@")) return null;
+
+  try {
+    const [res, record] = await Promise.all([
+      withTimeout(
+        mailauthSpf({
+          sender: senderForSpf,
+          ip: clientIp,
+          helo:
+            received.originHop?.fromHost ??
+            senderForSpf.split("@").pop() ??
+            "unknown",
+          mta: "mailsentry.local",
+          resolver: mailauthResolver(),
+        }) as Promise<{
+          status?: { result?: string; comment?: string | false };
+          domain?: string;
+        }>,
+        6000,
+      ),
+      withTimeout(getSpfRecord(email.senderDomain), 4000),
+    ]);
+
+    return {
+      result: verdict(res?.status?.result),
+      domain: res?.domain ?? email.senderDomain,
+      clientIp,
+      record: record ?? null,
+      comment: typeof res?.status?.comment === "string" ? res.status.comment : null,
+    };
+  } catch {
+    return {
+      result: null,
+      domain: email.senderDomain,
+      clientIp,
+      record: null,
+      comment: "SPF check errored",
+    };
+  }
+}
+
 export async function buildContext(
   email: ParsedEmail,
   userId: string,
@@ -100,52 +148,12 @@ export async function buildContext(
   const received = analyzeReceivedChain(email.receivedChain);
   const authResults = parseAuthenticationResults(email.authenticationResults);
 
-  let spfCheck: DetectorContext["spfCheck"] = null;
-  const clientIp = received.originIp;
-  const senderForSpf = email.returnPath || email.fromAddress;
-
-  if (clientIp && senderForSpf.includes("@")) {
-    try {
-      const [res, record] = await Promise.all([
-        withTimeout(
-          mailauthSpf({
-            sender: senderForSpf,
-            ip: clientIp,
-            helo:
-              received.originHop?.fromHost ??
-              senderForSpf.split("@").pop() ??
-              "unknown",
-            mta: "mailsentry.local",
-            resolver: mailauthResolver(),
-          }) as Promise<{
-            status?: { result?: string; comment?: string | false };
-            domain?: string;
-          }>,
-          6000,
-        ),
-        withTimeout(getSpfRecord(email.senderDomain), 4000),
-      ]);
-
-      spfCheck = {
-        result: verdict(res?.status?.result),
-        domain: res?.domain ?? email.senderDomain,
-        clientIp,
-        record: record ?? null,
-        comment:
-          typeof res?.status?.comment === "string"
-            ? res.status.comment
-            : null,
-      };
-    } catch {
-      spfCheck = {
-        result: null,
-        domain: email.senderDomain,
-        clientIp,
-        record: null,
-        comment: "SPF check errored",
-      };
-    }
-  }
+  const [spfCheck, llm] = await Promise.all([
+    checkSpf(email, received),
+    settings.enableLlm
+      ? analyzeWithLlm(email).catch(() => null)
+      : Promise.resolve(null),
+  ]);
 
   return {
     email,
@@ -154,6 +162,7 @@ export async function buildContext(
     received,
     authResults,
     spfCheck,
+    llm,
     sink: { urls: [], attachments: [] },
   };
 }

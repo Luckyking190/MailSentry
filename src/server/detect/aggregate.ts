@@ -18,6 +18,10 @@ export type Aggregated = {
  * contribution_i = score_i · confidence_i · weight_i
  * score          = 100 · Σ contribution / Σ weight
  * plus a hard floor of 85 when any triggered signal is `critical`.
+ *
+ * A detector reporting `confidence: 0` (e.g. an LLM detector when the LLM
+ * layer is disabled/degraded) is treated as "did not run" and excluded from
+ * the denominator entirely, so a disabled layer never dilutes the score.
  */
 export function aggregate(
   results: DetectorResult[],
@@ -31,7 +35,7 @@ export function aggregate(
     const weight = weightFor(r.detectorId);
     const contribution = r.triggered ? r.score * r.confidence * weight : 0;
     raw += contribution;
-    maxPossible += weight;
+    if (r.confidence > 0) maxPossible += weight;
     return { ...r, weight, contribution };
   });
 

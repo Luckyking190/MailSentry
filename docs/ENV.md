@@ -11,10 +11,10 @@ runtime; the `NEXT_PUBLIC_` prefix is not used — everything here is server-sid
 | `AUTH_URL` | ✅ (prod) | Full deployment URL, e.g. `https://mailsentry.vercel.app`. Local dev can omit. |
 | `GOOGLE_CLIENT_ID` | ✅ | Google Cloud → APIs & Services → Credentials → OAuth client (Web). |
 | `GOOGLE_CLIENT_SECRET` | ✅ | Same OAuth client. |
-| `FEATHERLESS_API_KEY` | ⬜ (Phase 5) | Featherless AI key. Without it, analysis runs deterministic-only. |
+| `FEATHERLESS_API_KEY` | ⬜ | Featherless AI key (featherless.ai → Settings → API keys). Without it the NLP/BEC/social-engineering detectors report "AI analysis unavailable" and the score is deterministic-only — nothing crashes. |
 | `FEATHERLESS_BASE_URL` | ⬜ | Default `https://api.featherless.ai/v1`. |
-| `FEATHERLESS_MODEL` | ⬜ | Default `Qwen/Qwen2.5-72B-Instruct` (needs the $25 Premium plan; use an ≤15B model on Basic). |
-| `FEATHERLESS_MAX_CONCURRENCY` | ⬜ | Default `3`. |
+| `FEATHERLESS_MODEL` | ⬜ | Default `Qwen/Qwen2.5-72B-Instruct` (needs the $25 Premium plan; use an ≤15B model, e.g. `meta-llama/Meta-Llama-3.1-8B-Instruct`, on the $10 Basic plan). |
+| `FEATHERLESS_MAX_CONCURRENCY` | ⬜ | Default `3` in-flight requests — Featherless limits by concurrent "units" (2 on Basic, 4 on Premium), not token volume. |
 | `IPINFO_TOKEN` | ⬜ (Phase 6) | ipinfo.io token for sender-IP geolocation. |
 | `SCAN_BATCH_SIZE` | ⬜ | Default `5` emails per `/api/scan/tick`. |
 

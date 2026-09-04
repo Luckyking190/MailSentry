@@ -2,6 +2,7 @@ import type { RiskBand } from "@prisma/client";
 import type { BandThresholds, SignalCategory } from "@/lib/scoring";
 import type { ParsedEmail } from "@/server/mail/types";
 import type { ReceivedChain } from "@/server/intel/received-chain";
+import type { LlmAnalysis } from "@/server/llm/analyze";
 
 export type Severity = "info" | "low" | "medium" | "high" | "critical";
 
@@ -120,6 +121,8 @@ export type DetectorContext = {
     record: string | null;
     comment: string | null;
   } | null;
+  /** Featherless combined analysis, or null when the LLM layer is disabled. */
+  llm: LlmAnalysis | null;
 };
 
 export interface Detector {

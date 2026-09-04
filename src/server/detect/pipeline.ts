@@ -2,7 +2,7 @@ import type { ParsedEmail } from "@/server/mail/types";
 import { buildContext, resolveSettings } from "./context";
 import { aggregate } from "./aggregate";
 import { composeSummary } from "./explain";
-import { DETERMINISTIC_DETECTORS } from "./registry";
+import { ALL_DETECTORS } from "./registry";
 import type {
   AnalysisOutcome,
   DetectorContext,
@@ -10,7 +10,7 @@ import type {
   ResolvedSettings,
 } from "./types";
 
-export const ENGINE_VERSION = "pipeline-3";
+export const ENGINE_VERSION = "pipeline-5";
 
 export type PipelineInput = {
   email: ParsedEmail;
@@ -32,7 +32,7 @@ export async function runPipeline(
 
   const weightFor = (id: string) =>
     settings.detectorWeights[id] ??
-    DETERMINISTIC_DETECTORS.find((d) => d.id === id)?.defaultWeight ??
+    ALL_DETECTORS.find((d) => d.id === id)?.defaultWeight ??
     0.1;
 
   const { score, band, categories, signals } = aggregate(
@@ -49,15 +49,15 @@ export async function runPipeline(
     summary,
     signals,
     engineVersion: ENGINE_VERSION,
+    llmModel: ctx.llm?.model ?? null,
+    llmDegraded: ctx.llm?.degraded ?? false,
     artifacts: ctx.sink,
   };
 }
 
-async function runDetectors(
-  ctx: DetectorContext,
-): Promise<DetectorResult[]> {
+async function runDetectors(ctx: DetectorContext): Promise<DetectorResult[]> {
   const settled = await Promise.allSettled(
-    DETERMINISTIC_DETECTORS.map(async (d) => {
+    ALL_DETECTORS.map(async (d) => {
       try {
         return await d.run(ctx);
       } catch {
@@ -69,10 +69,7 @@ async function runDetectors(
   return settled.map((s, i) =>
     s.status === "fulfilled"
       ? s.value
-      : safeEmpty(
-          DETERMINISTIC_DETECTORS[i].id,
-          DETERMINISTIC_DETECTORS[i].category,
-        ),
+      : safeEmpty(ALL_DETECTORS[i].id, ALL_DETECTORS[i].category),
   );
 }
 
