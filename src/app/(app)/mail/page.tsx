@@ -51,12 +51,23 @@ export default async function MailPage(props: PageProps<"/mail">) {
   }
   if (Object.keys(analysisWhere).length) where.analysis = { is: analysisWhere };
 
-  const emails = await prisma.emailRecord.findMany({
-    where,
-    include: { analysis: true },
-    orderBy: [{ sentAt: "desc" }],
-    take: 200,
-  });
+  const [emails, totalCount] = await Promise.all([
+    prisma.emailRecord.findMany({
+      where,
+      // Select only what this list renders. An EmailRecord also carries
+      // bodyText (<=32KB), bodyHtml (<=64KB) and the rawHeaders JSON, so
+      // `include` was pulling up to ~20MB over the wire to draw 200 subjects.
+      select: {
+        id: true,
+        subject: true,
+        senderDomain: true,
+        analysis: { select: { band: true, score: true } },
+      },
+      orderBy: [{ sentAt: "desc" }],
+      take: 200,
+    }),
+    prisma.emailRecord.count({ where: { userId } }),
+  ]);
 
   const byDomain = new Map<string, typeof emails>();
   for (const e of emails) {
@@ -64,8 +75,6 @@ export default async function MailPage(props: PageProps<"/mail">) {
     list.push(e);
     byDomain.set(e.senderDomain, list);
   }
-
-  const totalCount = await prisma.emailRecord.count({ where: { userId } });
 
   const filterValues: FilterValues = { q, domain, category, band, since };
 

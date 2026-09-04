@@ -1,6 +1,7 @@
 import { getDomain } from "tldts";
 
 import { prisma } from "@/server/db";
+import { singleFlight } from "./single-flight";
 
 export type DomainAge = {
   domain: string;
@@ -40,6 +41,11 @@ export async function getDomainAge(input: string): Promise<DomainAge> {
   const mem = memCache.get(domain);
   if (mem && mem.expires > now) return mem.value;
 
+  return singleFlight(`RDAP:${domain}`, () => fetchDomainAge(domain));
+}
+
+async function fetchDomainAge(domain: string): Promise<DomainAge> {
+  const now = Date.now();
   const key = `RDAP:${domain}`;
   const row = await prisma.dnsCache.findUnique({ where: { key } }).catch(() => null);
   if (row && row.fetchedAt.getTime() + row.ttlSeconds * 1000 > now) {

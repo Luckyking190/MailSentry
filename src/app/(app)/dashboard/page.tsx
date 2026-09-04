@@ -9,6 +9,8 @@ import { Card, CardBody } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { RiskBadge } from "@/components/RiskBadge";
 import { Filters, type FilterValues } from "@/components/Filters";
+import { ScanRunner } from "@/components/ScanRunner";
+import { getActiveOrLatestJob, toProgress } from "@/server/scan/job";
 import { BAND_ORDER, BAND_META, SIGNAL_CATEGORIES } from "@/lib/scoring";
 
 export const metadata: Metadata = { title: "Dashboard" };
@@ -29,14 +31,19 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
   const band = one(sp.band);
   const since = one(sp.since);
 
-  const [total, byBand] = await Promise.all([
+  const [total, byBand, job] = await Promise.all([
     prisma.emailRecord.count({ where: { userId } }),
     prisma.analysisResult.groupBy({
       by: ["band"],
       where: { email: { userId } },
       _count: true,
     }),
+    getActiveOrLatestJob(userId),
   ]);
+
+  // An unfinished job keeps ticking from here, so the dashboard is usable
+  // while the rest of the mailbox is still being scored.
+  const activeJob = job && !["DONE", "FAILED"].includes(job.phase) ? job : null;
 
   const counts = Object.fromEntries(byBand.map((b) => [b.band, b._count]));
   const flagged = BAND_ORDER.filter((b) => b !== "SAFE" && b !== "LOW").reduce(
@@ -76,7 +83,14 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
   const filtered = hasFilters
     ? await prisma.emailRecord.findMany({
         where,
-        include: { analysis: true },
+        // List columns only — see the note in /mail; the row also holds the
+        // full body and raw headers.
+        select: {
+          id: true,
+          subject: true,
+          senderDomain: true,
+          analysis: { select: { band: true, score: true } },
+        },
         orderBy: { sentAt: "desc" },
         take: 30,
       })
@@ -95,6 +109,8 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
           </Link>
         }
       />
+
+      {activeJob && <ScanRunner initial={toProgress(activeJob)} compact />}
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Card>

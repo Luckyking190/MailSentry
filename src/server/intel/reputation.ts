@@ -3,6 +3,7 @@ import { getDomain } from "tldts";
 import { prisma } from "@/server/db";
 import { dnsResolve, getSpfRecord } from "./dns";
 import { getDomainAge } from "./rdap";
+import { singleFlight } from "./single-flight";
 
 export type DomainReputationSnapshot = {
   domain: string;
@@ -34,6 +35,12 @@ export async function getDomainReputation(
   const mem = memCache.get(domain);
   if (mem && mem.expires > Date.now()) return mem.value;
 
+  return singleFlight(`REP:${domain}`, () => fetchDomainReputation(domain));
+}
+
+async function fetchDomainReputation(
+  domain: string,
+): Promise<DomainReputationSnapshot> {
   const existing = await prisma.domainReputation
     .findUnique({ where: { domain } })
     .catch(() => null);

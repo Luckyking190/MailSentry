@@ -1,5 +1,6 @@
 import { prisma } from "@/server/db";
 import { reversePtr } from "./dns";
+import { singleFlight } from "./single-flight";
 
 export type GeoRecord = {
   ip: string;
@@ -90,26 +91,27 @@ async function fetchFromIpinfo(ip: string): Promise<GeoRecord> {
  * through so a cold process can reuse them.
  */
 export async function geolocateIp(ip: string): Promise<GeoRecord> {
-  const now = Date.now();
   const mem = memCache.get(ip);
-  if (mem && mem.expires > now) return mem.value;
+  if (mem && mem.expires > Date.now()) return mem.value;
 
-  const key = `GEO:${ip}`;
-  const [geo, ptr] = await Promise.all([fetchFromIpinfo(ip), reversePtr(ip)]);
-  const value: GeoRecord = { ...geo, ptr };
+  return singleFlight(`GEO:${ip}`, async () => {
+    const key = `GEO:${ip}`;
+    const [geo, ptr] = await Promise.all([fetchFromIpinfo(ip), reversePtr(ip)]);
+    const value: GeoRecord = { ...geo, ptr };
 
-  memCache.set(ip, { value, expires: now + MEM_TTL_MS });
-  if (value.provider !== "unknown") {
-    await prisma.dnsCache
-      .upsert({
-        where: { key },
-        create: { key, value: value as object, ttlSeconds: DB_TTL_S },
-        update: { value: value as object, ttlSeconds: DB_TTL_S, fetchedAt: new Date() },
-      })
-      .catch(() => {});
-  }
+    memCache.set(ip, { value, expires: Date.now() + MEM_TTL_MS });
+    if (value.provider !== "unknown") {
+      await prisma.dnsCache
+        .upsert({
+          where: { key },
+          create: { key, value: value as object, ttlSeconds: DB_TTL_S },
+          update: { value: value as object, ttlSeconds: DB_TTL_S, fetchedAt: new Date() },
+        })
+        .catch(() => {});
+    }
 
-  return value;
+    return value;
+  });
 }
 
 /** Geolocate several IPs with bounded concurrency, deduping repeats. */

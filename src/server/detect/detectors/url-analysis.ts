@@ -132,6 +132,18 @@ export const urlAnalysisDetector: Detector = {
       }),
     );
 
+    // Warm the RDAP age lookups in parallel. The scoring loop below awaits
+    // them one at a time, and single-flight makes each of those awaits attach
+    // to the request already in flight — so the cost is max(lookup) instead of
+    // sum(lookup). Cold, that was up to 4 sequential 3.5s calls per email.
+    for (const cand of assessed
+      .filter((x) => x.isShortener || x.anchorMismatch || x.punycode || x.isIpHost)
+      .slice(0, MAX_AGE_LOOKUPS)) {
+      const host = expansions.get(cand.url.rawUrl)?.finalHost ?? cand.url.host;
+      const d = host ? getDomain(host) : null;
+      if (d) void getDomainAge(d).catch(() => {});
+    }
+
     for (const a of assessed) {
       const u = a.url;
       const exp = expansions.get(u.rawUrl);

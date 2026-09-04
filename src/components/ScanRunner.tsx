@@ -39,9 +39,12 @@ const ROTATING = [
 export function ScanRunner({
   initial,
   mode = "gmail",
+  compact = false,
 }: {
   initial: Progress | null;
   mode?: "gmail" | "demo";
+  /** Banner variant rendered on the dashboard while a scan runs in the background. */
+  compact?: boolean;
 }) {
   const router = useRouter();
   const [progress, setProgress] = useState<Progress | null>(initial);
@@ -69,10 +72,21 @@ export function ScanRunner({
             break;
           }
           setProgress(data);
+          // Each tick has already committed its batch, so re-render the
+          // server components around us and the dashboard fills in live.
+          if (compact) router.refresh();
           if (data.done) {
             if (data.phase === "DONE") {
-              setTimeout(() => router.push("/dashboard"), 1200);
+              if (compact) router.refresh();
+              else setTimeout(() => router.push("/dashboard"), 1200);
             }
+            break;
+          }
+          // Hand over to the dashboard as soon as there are results to show —
+          // it keeps ticking from there, so the rest of the scan happens
+          // behind a usable page instead of a progress bar.
+          if (!compact && data.processed > 0) {
+            router.push("/dashboard");
             break;
           }
         }
@@ -83,7 +97,7 @@ export function ScanRunner({
         setRunning(false);
       }
     },
-    [router],
+    [router, compact],
   );
 
   const loadDemo = useCallback(async () => {
@@ -161,6 +175,32 @@ export function ScanRunner({
 
   const isDone = progress?.done && progress.phase === "DONE";
   const isFailed = progress?.phase === "FAILED" || !!error;
+
+  if (compact) {
+    if (isDone || (!progress && !error)) return null;
+    return (
+      <div className="mb-4 rounded-xl border border-border bg-surface px-4 py-3">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <p className="text-xs text-muted">
+            {isFailed
+              ? (error ?? "Scan failed — results below are partial.")
+              : `${tip} Results appear here as they are scored.`}
+          </p>
+          <p className="shrink-0 text-xs tabular-nums text-muted">
+            {progress ? `${progress.processed}/${progress.total || "…"}` : "…"}
+          </p>
+        </div>
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
+          <div
+            className={`h-full rounded-full transition-all duration-500 ${
+              isFailed ? "bg-rose-500" : "bg-brand"
+            }`}
+            style={{ width: `${isFailed ? 100 : pct}%` }}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-lg">

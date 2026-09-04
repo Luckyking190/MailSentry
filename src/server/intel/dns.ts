@@ -1,5 +1,7 @@
 import { promises as dns } from "node:dns";
 
+import { singleFlight } from "./single-flight";
+
 type Rrtype = "TXT" | "MX" | "A" | "AAAA" | "CNAME" | "NS";
 
 const memCache = new Map<string, { value: unknown; expires: number }>();
@@ -41,22 +43,24 @@ export async function dnsResolve<T = string[]>(
   const mem = memCache.get(key);
   if (mem && mem.expires > now) return mem.value as T;
 
-  let value: unknown = [];
-  let ttl = POS_TTL_MS;
-  try {
-    value = await withTimeout(
-      dns.resolve(name, rrtype as "TXT"),
-      DNS_TIMEOUT_MS,
-      [] as unknown as string[][],
-    );
-    if (Array.isArray(value) && value.length === 0) ttl = NEG_TTL_MS;
-  } catch {
-    value = [];
-    ttl = NEG_TTL_MS;
-  }
+  return singleFlight(key, async () => {
+    let value: unknown = [];
+    let ttl = POS_TTL_MS;
+    try {
+      value = await withTimeout(
+        dns.resolve(name, rrtype as "TXT"),
+        DNS_TIMEOUT_MS,
+        [] as unknown as string[][],
+      );
+      if (Array.isArray(value) && value.length === 0) ttl = NEG_TTL_MS;
+    } catch {
+      value = [];
+      ttl = NEG_TTL_MS;
+    }
 
-  memCache.set(key, { value, expires: now + ttl });
-  return value as T;
+    memCache.set(key, { value, expires: Date.now() + ttl });
+    return value as T;
+  });
 }
 
 export async function resolveTxtRecords(name: string): Promise<string[]> {
@@ -79,13 +83,15 @@ export async function reversePtr(ip: string): Promise<string | null> {
   const key = `DNS:PTR:${ip}`;
   const mem = memCache.get(key);
   if (mem && mem.expires > Date.now()) return (mem.value as string) || null;
-  let ptr: string | null = null;
-  try {
-    const names = await withTimeout(dns.reverse(ip), DNS_TIMEOUT_MS, [] as string[]);
-    ptr = names[0] ?? null;
-  } catch {
-    ptr = null;
-  }
-  memCache.set(key, { value: ptr ?? "", expires: Date.now() + POS_TTL_MS });
-  return ptr;
+  return singleFlight(key, async () => {
+    let ptr: string | null = null;
+    try {
+      const names = await withTimeout(dns.reverse(ip), DNS_TIMEOUT_MS, [] as string[]);
+      ptr = names[0] ?? null;
+    } catch {
+      ptr = null;
+    }
+    memCache.set(key, { value: ptr ?? "", expires: Date.now() + POS_TTL_MS });
+    return ptr;
+  });
 }
