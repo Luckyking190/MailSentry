@@ -16,7 +16,40 @@ runtime; the `NEXT_PUBLIC_` prefix is not used — everything here is server-sid
 | `FEATHERLESS_MODEL` | ⬜ | Default `Qwen/Qwen2.5-14B-Instruct`. See **Choosing a Featherless model** below before switching to a larger one. |
 | `FEATHERLESS_MAX_CONCURRENCY` | ⬜ | Default `4` in-flight requests. Match this to your plan's concurrency-unit limit — see below. |
 | `IPINFO_TOKEN` | ⬜ (Phase 6) | ipinfo.io token for sender-IP geolocation. |
-| `SCAN_BATCH_SIZE` | ⬜ | Default `8` emails per `/api/scan/tick`. |
+| `SCAN_CONCURRENCY` | ⬜ | Default `16` emails analyzed at once per `/api/scan/tick`. See **Scan throughput** below. |
+
+## Scan throughput
+
+`SCAN_CONCURRENCY` is how many messages a single `/api/scan/tick` works on at
+once. Per-email cost is I/O — Gmail fetch, DNS/SPF, Neon writes, an occasional
+LLM call — and wildly uneven (median analysis is ~1ms; a message with links and
+a cold RDAP lookup can take 13s), so the worker runs a sliding pool rather than
+fixed batches: a free slot takes the next message immediately instead of
+waiting on the slowest member of a group.
+
+Measured over 100 real messages from a laptop in India against Neon in
+`us-east-2`:
+
+| `SCAN_CONCURRENCY` | Wall time for 100 emails |
+|---|---|
+| 8 | 50.3s |
+| **16 (default)** | **28.8s** |
+| 24 | 21.7s |
+| 32 | 19.7s |
+
+Gains flatten past ~24 while Gmail's per-user throttling gets more likely
+(back-to-back runs at high concurrency dropped 19 of 100 messages before
+`fetchRawMessage` grew a retry), so 16 is the default. Raise it if you need a
+faster demo run.
+
+Most of the remaining time is database round trips: a single `SELECT 1` to Neon
+costs ~255ms from a dev laptop, and that latency is flat from 1 to 32 concurrent
+queries — the pool is not the constraint, distance is. Deployed on Vercel in the
+same region as Neon the round trip is ~10–20ms, so a deployed scan is
+substantially faster than these local numbers.
+
+`FEATHERLESS_MAX_CONCURRENCY` is separate and still caps LLM calls on its own,
+so raising `SCAN_CONCURRENCY` does not oversubscribe your Featherless plan.
 
 ## Choosing a Featherless model
 

@@ -17,7 +17,7 @@ export const FEATHERLESS_MODEL =
 // behind it.
 export const FEATHERLESS_MAX_CONCURRENCY = Math.max(
   1,
-  Number(process.env.FEATHERLESS_MAX_CONCURRENCY ?? 3),
+  Number(process.env.FEATHERLESS_MAX_CONCURRENCY ?? 4),
 );
 
 export function llmEnabled(): boolean {
