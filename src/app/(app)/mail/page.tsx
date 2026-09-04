@@ -63,6 +63,8 @@ export default async function MailPage(props: PageProps<"/mail">) {
         subject: true,
         senderDomain: true,
         analysis: { select: { band: true, score: true } },
+        priorityScore: true,
+        isUnread: true,
         // Origin hop only — one row per email, not the whole chain.
         geoIntel: {
           where: { isTrustedOrigin: true },
@@ -70,7 +72,9 @@ export default async function MailPage(props: PageProps<"/mail">) {
           take: 1,
         },
       },
-      orderBy: [{ sentAt: "desc" }],
+      // Priority first so the mail the user actually cares about floats up;
+      // nulls (not yet scored) sort last rather than ahead of everything.
+      orderBy: [{ priorityScore: { sort: "desc", nulls: "last" } }, { sentAt: "desc" }],
       take: 200,
     }),
     prisma.emailRecord.count({ where: { userId } }),
@@ -130,8 +134,22 @@ export default async function MailPage(props: PageProps<"/mail">) {
                               className="flex items-center justify-between gap-3 py-2 text-sm hover:text-brand"
                             >
                               <span className="min-w-0 flex-1 truncate">
+                                {e.isUnread && (
+                                  <span
+                                    className="mr-1.5 inline-block size-1.5 rounded-full bg-brand align-middle"
+                                    title="Unread in Gmail"
+                                  />
+                                )}
                                 {e.subject || "(no subject)"}
                               </span>
+                              {e.priorityScore != null && (
+                                <span
+                                  className="hidden shrink-0 text-xs tabular-nums text-muted/70 md:inline"
+                                  title={`Priority ${e.priorityScore}/100 — learned from how often you read ${e.senderDomain}, plus recency and risk`}
+                                >
+                                  P{e.priorityScore}
+                                </span>
+                              )}
                               {e.geoIntel[0] && (
                                 <span
                                   className="hidden shrink-0 text-xs text-muted sm:inline"

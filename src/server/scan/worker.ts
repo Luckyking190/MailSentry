@@ -2,6 +2,7 @@ import { prisma } from "@/server/db";
 import { getGmailClient } from "@/server/gmail/client";
 import { fetchRawMessage } from "@/server/gmail/fetchRaw";
 import { parseEmail } from "@/server/mail/parse";
+import { recordEngagement } from "@/server/priority";
 import { persistAnalyzedEmail, loadUserSettings, type SettingsInput } from "./persist";
 import { toProgress, type ScanProgress } from "./job";
 
@@ -48,6 +49,10 @@ export async function tickScan(
   // Here a finished worker takes the next id immediately.
   const inProgress = new Set<string>();
   let sinceFlush = 0;
+  // Engagement is folded in once per tick rather than per message: these are
+  // increments, so batching them keeps a re-run from inflating the counters
+  // and saves a write per email.
+  const engagement: { senderDomain: string; isUnread: boolean; isStarred: boolean }[] = [];
 
   const flush = async () => {
     sinceFlush = 0;
@@ -74,9 +79,16 @@ export async function tickScan(
       const id = queue.shift()!;
       inProgress.add(id);
       try {
-        const band = await processOne(userId, job!.id, gmail, settings, id);
+        const { band, engagement: e } = await processOne(
+          userId,
+          job!.id,
+          gmail,
+          settings,
+          id,
+        );
         processed += 1;
         histogram[band] = (histogram[band] ?? 0) + 1;
+        engagement.push(e);
       } catch {
         failed += 1;
       } finally {
@@ -91,6 +103,8 @@ export async function tickScan(
   );
 
   await flush();
+  // After the queue drains, so a slow counter write never delays results.
+  await recordEngagement(userId, engagement).catch(() => {});
   return toProgress(job);
 }
 
@@ -100,9 +114,21 @@ async function processOne(
   gmail: Awaited<ReturnType<typeof getGmailClient>>,
   settings: SettingsInput,
   gmailId: string,
-): Promise<string> {
+): Promise<{
+  band: string;
+  engagement: { senderDomain: string; isUnread: boolean; isStarred: boolean };
+}> {
   const rawMsg = await fetchRawMessage(gmail, gmailId);
   const parsed = await parseEmail(rawMsg.raw, rawMsg.snippet ?? undefined);
+
+  const labels = {
+    labelIds: rawMsg.labelIds,
+    // Gmail removes UNREAD the moment a message is opened, so its absence is
+    // the "the user read this" signal the priority index learns from.
+    isUnread: rawMsg.labelIds.includes("UNREAD"),
+    isImportant: rawMsg.labelIds.includes("IMPORTANT"),
+    isStarred: rawMsg.labelIds.includes("STARRED"),
+  };
 
   const { band } = await persistAnalyzedEmail({
     userId,
@@ -112,7 +138,15 @@ async function processOne(
     parsed,
     sentAtHint: rawMsg.internalDate,
     settings,
+    labels,
   });
 
-  return band;
+  return {
+    band,
+    engagement: {
+      senderDomain: parsed.senderDomain,
+      isUnread: labels.isUnread,
+      isStarred: labels.isStarred,
+    },
+  };
 }

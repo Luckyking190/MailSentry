@@ -28,6 +28,7 @@ model User {
   settings UserSettings?
   scanJobs ScanJob[]
   emails   EmailRecord[]
+  engagement SenderEngagement[]
 }
 
 model Account {
@@ -82,6 +83,9 @@ model UserSettings {
   scanWindowDays  Int      @default(90)
   maxEmails       Int      @default(300)
   brandWatchlist  String[] @default([])
+  /// Watermark for the unseen-mail badge: everything analyzed after this
+  /// instant counts as "new" until the user opens the dashboard.
+  mailSeenAt      DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -161,6 +165,16 @@ model EmailRecord {
   rawHeaders     Json        @default("{}")
   hasAttachments Boolean     @default(false)
   createdAt      DateTime    @default(now())
+
+  // Engagement signals straight off the Gmail message resource. `isUnread` is
+  // the raw material for the priority index: "did the user open this?".
+  labelIds    String[] @default([])
+  isUnread    Boolean  @default(false)
+  isImportant Boolean  @default(false)
+  isStarred   Boolean  @default(false)
+
+  // 0-100, higher = more likely the user wants to see it. Null until scored.
+  priorityScore Int?
 
   user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   scanJob     ScanJob?         @relation(fields: [scanJobId], references: [id], onDelete: SetNull)
@@ -280,6 +294,28 @@ model AttachmentMeta {
 // ---------------------------------------------------------------------------
 // Caches (shared across users)
 // ---------------------------------------------------------------------------
+
+/// Rolling per-sender engagement counts, updated on every scan. This is the
+/// learned half of the priority index: how often mail from this sender
+/// actually gets opened. Deliberately per-user — one person's newsletter is
+/// another's signal.
+model SenderEngagement {
+  id       String @id @default(cuid())
+  userId   String
+  /// Sender domain, lowercased. Domain rather than full address so a new
+  /// address at a known-good sender inherits its reputation immediately.
+  sender   String
+  seen     Int    @default(0)
+  read     Int    @default(0)
+  starred  Int    @default(0)
+  lastSeenAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, sender])
+  @@index([userId])
+}
 
 model DomainReputation {
   domain           String    @id

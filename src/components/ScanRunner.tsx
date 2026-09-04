@@ -123,7 +123,13 @@ export function ScanRunner({
     async (force = false) => {
       if (mode === "demo") return loadDemo();
       setError(null);
-      const res = await fetch("/api/scan/start", { method: "POST" });
+      // Default start is incremental (new arrivals only); the Re-scan button
+      // asks for the whole window again.
+      const res = await fetch("/api/scan/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ full: force }),
+      });
       const data = (await res.json()) as Progress & { error?: string };
       if (!res.ok) {
         setError(

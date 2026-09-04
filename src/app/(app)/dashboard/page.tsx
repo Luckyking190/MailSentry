@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { RiskBadge } from "@/components/RiskBadge";
 import { Filters, type FilterValues } from "@/components/Filters";
 import { ScanRunner } from "@/components/ScanRunner";
+import { NewMailWatcher } from "@/components/NewMailWatcher";
 import { getActiveOrLatestJob, toProgress } from "@/server/scan/job";
 import { BAND_ORDER, BAND_META, SIGNAL_CATEGORIES } from "@/lib/scoring";
 import { countryFlag, countryName } from "@/lib/geo";
@@ -125,6 +126,9 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
       />
 
       {activeJob && <ScanRunner initial={toProgress(activeJob)} compact />}
+
+      {/* Polls Gmail for arrivals and runs them through the same pipeline. */}
+      {!activeJob && total > 0 && <NewMailWatcher />}
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Card>

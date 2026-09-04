@@ -6,6 +6,7 @@ import { getDomainReputation } from "@/server/intel/reputation";
 import { analyzeReceivedChain } from "@/server/intel/received-chain";
 import { geolocateMany } from "@/server/intel/geoip";
 import type { ParsedEmail } from "@/server/mail/types";
+import { engagementFor, priorityScore } from "@/server/priority";
 
 export type SettingsInput = {
   detectorWeights: unknown;
@@ -23,6 +24,13 @@ export type PersistParams = {
   parsed: ParsedEmail;
   sentAtHint?: Date | null;
   settings: SettingsInput;
+  /** Gmail label state, when the source provides it (absent for demo mail). */
+  labels?: {
+    labelIds: string[];
+    isUnread: boolean;
+    isImportant: boolean;
+    isStarred: boolean;
+  };
 };
 
 /**
@@ -62,6 +70,10 @@ export async function persistAnalyzedEmail(
       bodyHtml: parsed.bodyHtml,
       rawHeaders: parsed.headers,
       hasAttachments: parsed.hasAttachments,
+      labelIds: p.labels?.labelIds ?? [],
+      isUnread: p.labels?.isUnread ?? false,
+      isImportant: p.labels?.isImportant ?? false,
+      isStarred: p.labels?.isStarred ?? false,
     },
     update: {
       scanJobId,
@@ -69,6 +81,16 @@ export async function persistAnalyzedEmail(
       senderDomain: parsed.senderDomain,
       fromDisplay: parsed.fromDisplay,
       hasAttachments: parsed.hasAttachments,
+      // Re-scanning an existing message refreshes its read/star state, so the
+      // priority index tracks the mailbox rather than a first-seen snapshot.
+      ...(p.labels
+        ? {
+            labelIds: p.labels.labelIds,
+            isUnread: p.labels.isUnread,
+            isImportant: p.labels.isImportant,
+            isStarred: p.labels.isStarred,
+          }
+        : {}),
     },
   });
 
@@ -196,9 +218,54 @@ export async function persistAnalyzedEmail(
     artifactsWrite,
     getDomainReputation(parsed.senderDomain).catch(() => {}),
     persistGeoIntel(email.id, parsed.receivedChain).catch(() => {}),
+    persistPriority(email.id, {
+      userId,
+      senderDomain: parsed.senderDomain,
+      sentAt: parsed.sentAt ?? p.sentAtHint ?? null,
+      isStarred: p.labels?.isStarred ?? false,
+      isImportant: p.labels?.isImportant ?? false,
+      riskScore: outcome.score,
+    }).catch(() => {
+      // Priority is an ordering hint; never fail a scan over it.
+    }),
   ]);
 
   return { emailId: email.id, band: outcome.band };
+}
+
+/**
+ * Score how much this user is likely to want this mail, from the sender's
+ * accumulated read rate plus recency, explicit flags and a risk penalty.
+ * Read-only against the counters — the scan worker folds the batch in after,
+ * so re-analysis never double-counts a message it has already learned from.
+ */
+async function persistPriority(
+  emailId: string,
+  input: {
+    userId: string;
+    senderDomain: string;
+    sentAt: Date | null;
+    isStarred: boolean;
+    isImportant: boolean;
+    riskScore: number;
+  },
+): Promise<void> {
+  const stats = await engagementFor(input.userId, [input.senderDomain]);
+  const s = stats.get(input.senderDomain.toLowerCase()) ?? { read: 0, seen: 0 };
+
+  const score = priorityScore({
+    read: s.read,
+    seen: s.seen,
+    sentAt: input.sentAt,
+    isStarred: input.isStarred,
+    isImportant: input.isImportant,
+    riskScore: input.riskScore,
+  });
+
+  await prisma.emailRecord.update({
+    where: { id: emailId },
+    data: { priorityScore: score },
+  });
 }
 
 async function persistGeoIntel(

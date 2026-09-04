@@ -49,6 +49,8 @@ export async function getActiveOrLatestJob(
 export async function startScan(
   userId: string,
   source: EmailSource = "gmail",
+  /** Re-queue the whole window instead of just new arrivals. */
+  full = false,
 ): Promise<ScanJob> {
   const existing = await prisma.scanJob.findFirst({
     where: { userId, phase: { in: [...ACTIVE_PHASES] } },
@@ -78,13 +80,27 @@ export async function startScan(
       windowDays: settings.scanWindowDays,
     });
 
+    // Only queue what has not been analyzed yet. Upserts made re-processing
+    // harmless but not free — every repeat scan re-fetched and re-scored the
+    // whole window. Skipping known ids turns a re-run into an incremental
+    // pass over just the new arrivals, which is what makes polling for new
+    // mail cheap enough to do on an interval.
+    const known = full
+      ? []
+      : await prisma.emailRecord.findMany({
+          where: { userId, source: "gmail", gmailId: { in: ids } },
+          select: { gmailId: true },
+        });
+    const seen = new Set(known.map((e) => e.gmailId));
+    const fresh = ids.filter((id) => !seen.has(id));
+
     return prisma.scanJob.update({
       where: { id: job.id },
       data: {
-        phase: ids.length ? "ANALYZING" : "DONE",
-        total: ids.length,
-        messageQueue: ids,
-        finishedAt: ids.length ? null : new Date(),
+        phase: fresh.length ? "ANALYZING" : "DONE",
+        total: fresh.length,
+        messageQueue: fresh,
+        finishedAt: fresh.length ? null : new Date(),
       },
     });
   } catch (err) {
