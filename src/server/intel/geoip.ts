@@ -41,14 +41,18 @@ function empty(ip: string): GeoRecord {
 }
 
 async function fetchFromIpinfo(ip: string): Promise<GeoRecord> {
+  // The token raises the rate limit but is not required: ipinfo's unauthenticated
+  // endpoint returns the same city/country/loc/org fields, just capped per day.
+  // Gating on the token made every hop geolocate as null whenever it was unset,
+  // which silently emptied the whole geolocation feature — so treat it as
+  // optional and let the daily cap (not a missing credential) be the limit.
   const token = process.env.IPINFO_TOKEN;
-  if (!token) return empty(ip);
+  const url = token
+    ? `https://ipinfo.io/${encodeURIComponent(ip)}/json?token=${encodeURIComponent(token)}`
+    : `https://ipinfo.io/${encodeURIComponent(ip)}/json`;
 
   try {
-    const res = await fetch(
-      `https://ipinfo.io/${encodeURIComponent(ip)}/json?token=${encodeURIComponent(token)}`,
-      { signal: AbortSignal.timeout(3000) },
-    );
+    const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
     if (!res.ok) return empty(ip);
     const data = (await res.json()) as {
       city?: string;

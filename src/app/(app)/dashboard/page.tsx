@@ -12,6 +12,7 @@ import { Filters, type FilterValues } from "@/components/Filters";
 import { ScanRunner } from "@/components/ScanRunner";
 import { getActiveOrLatestJob, toProgress } from "@/server/scan/job";
 import { BAND_ORDER, BAND_META, SIGNAL_CATEGORIES } from "@/lib/scoring";
+import { countryFlag, countryName } from "@/lib/geo";
 
 export const metadata: Metadata = { title: "Dashboard" };
 export const dynamic = "force-dynamic";
@@ -31,7 +32,7 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
   const band = one(sp.band);
   const since = one(sp.since);
 
-  const [total, byBand, job] = await Promise.all([
+  const [total, byBand, job, byCountry] = await Promise.all([
     prisma.emailRecord.count({ where: { userId } }),
     prisma.analysisResult.groupBy({
       by: ["band"],
@@ -39,7 +40,20 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
       _count: true,
     }),
     getActiveOrLatestJob(userId),
+    // Where mail actually entered the internet from: one row per email, the
+    // earliest *trusted* Received hop. Hops older than that are attacker-
+    // controlled and would poison the ranking, so they are excluded here the
+    // same way the SPF detector ignores them.
+    prisma.geoIntel.groupBy({
+      by: ["country"],
+      where: { isTrustedOrigin: true, country: { not: null }, email: { userId } },
+      _count: { _all: true },
+      orderBy: { _count: { country: "desc" } },
+      take: 6,
+    }),
   ]);
+
+  const geoTotal = byCountry.reduce((n, r) => n + r._count._all, 0);
 
   // An unfinished job keeps ticking from here, so the dashboard is usable
   // while the rest of the mailbox is still being scored.
@@ -162,6 +176,44 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
           </CardBody>
         </Card>
       </div>
+
+      {geoTotal > 0 && (
+        <div className="mt-4">
+          <Card>
+            <CardBody>
+              <div className="mb-3 flex items-baseline justify-between">
+                <p className="text-xs text-muted">Top incoming mail locations</p>
+                <p className="text-xs text-muted/70">
+                  origin of {geoTotal} geolocated {geoTotal === 1 ? "email" : "emails"}
+                </p>
+              </div>
+              <div className="flex flex-col gap-2">
+                {byCountry.map((row) => {
+                  const count = row._count._all;
+                  const pct = Math.round((count / geoTotal) * 100);
+                  return (
+                    <div key={row.country} className="flex items-center gap-3 text-xs">
+                      <span className="w-40 truncate" title={countryName(row.country)}>
+                        <span aria-hidden>{countryFlag(row.country)}</span>{" "}
+                        <span className="text-muted">{countryName(row.country)}</span>
+                      </span>
+                      <span className="h-2 flex-1 overflow-hidden rounded-full bg-surface-2">
+                        <span
+                          className="block h-full bg-brand"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </span>
+                      <span className="w-10 text-right tabular-nums text-muted">
+                        {count}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardBody>
+          </Card>
+        </div>
+      )}
 
       {total === 0 ? (
         <div className="mt-4">

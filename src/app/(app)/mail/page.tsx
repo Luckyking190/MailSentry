@@ -9,6 +9,7 @@ import { Card, CardBody } from "@/components/ui/card";
 import { RiskBadge } from "@/components/RiskBadge";
 import { Filters, type FilterValues } from "@/components/Filters";
 import { BAND_ORDER, SIGNAL_CATEGORIES } from "@/lib/scoring";
+import { placeLabel } from "@/lib/geo";
 
 export const metadata: Metadata = { title: "Mail" };
 export const dynamic = "force-dynamic";
@@ -62,6 +63,12 @@ export default async function MailPage(props: PageProps<"/mail">) {
         subject: true,
         senderDomain: true,
         analysis: { select: { band: true, score: true } },
+        // Origin hop only — one row per email, not the whole chain.
+        geoIntel: {
+          where: { isTrustedOrigin: true },
+          select: { country: true, city: true },
+          take: 1,
+        },
       },
       orderBy: [{ sentAt: "desc" }],
       take: 200,
@@ -125,6 +132,17 @@ export default async function MailPage(props: PageProps<"/mail">) {
                               <span className="min-w-0 flex-1 truncate">
                                 {e.subject || "(no subject)"}
                               </span>
+                              {e.geoIntel[0] && (
+                                <span
+                                  className="hidden shrink-0 text-xs text-muted sm:inline"
+                                  title={`Originating mail server: ${placeLabel(
+                                    e.geoIntel[0].country,
+                                    e.geoIntel[0].city,
+                                  )}`}
+                                >
+                                  {placeLabel(e.geoIntel[0].country, e.geoIntel[0].city)}
+                                </span>
+                              )}
                               {e.analysis ? (
                                 <RiskBadge band={e.analysis.band} score={e.analysis.score} />
                               ) : (
