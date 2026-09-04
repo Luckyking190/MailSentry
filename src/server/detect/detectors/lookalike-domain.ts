@@ -58,12 +58,19 @@ export const lookalikeDomainDetector: Detector = {
       if (score >= 0.82) break;
     }
 
-    // 2. Homoglyph / confusable skeleton match.
+    // 2. Homoglyph / confusable skeleton match — exact, or the domain's
+    //    skeleton starts with the brand's skeleton followed by a separator
+    //    (m1crosoft-secure-support.com still folds to "m1crosoft" up front).
     if (score < 0.8) {
       for (const entry of brandSkeletonIndex()) {
         if (entry.domain === domain) continue;
-        if (entry.skel === skel && entry.domain.split(".")[0] !== label) {
-          score = Math.max(score, 0.86);
+        const exact = entry.skel === skel;
+        const prefixed =
+          !exact &&
+          skel.startsWith(entry.skel) &&
+          /[^a-z0-9]/.test(skel[entry.skel.length] ?? "");
+        if ((exact || prefixed) && entry.domain.split(".")[0] !== label) {
+          score = Math.max(score, exact ? 0.86 : 0.8);
           tags.push(entry.brand.name);
           evidence.push({
             label: "Homoglyph lookalike",

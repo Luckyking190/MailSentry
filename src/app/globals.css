@@ -47,3 +47,19 @@ body {
 ::selection {
   background: color-mix(in oklab, var(--brand) 40%, transparent);
 }
+
+/* Shared form control style (Filters, SettingsForm) */
+.input {
+  height: 2.25rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  padding: 0 0.6rem;
+  font-size: 0.8rem;
+  color: var(--foreground);
+  width: 100%;
+}
+.input:focus {
+  outline: 2px solid var(--brand);
+  outline-offset: -1px;
+}

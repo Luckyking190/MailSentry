@@ -1,0 +1,30 @@
+Delivered-To: victim@corp.example
+Received: by mx.google.com with SMTPS id w1x2y3 for <victim@corp.example>; Fri, 28 Aug 2026 13:47:52 -0700 (PDT)
+Received: from mail.globalsupplies-billing.com (mail.globalsupplies-billing.com [176.113.115.5]) by mx.google.com with ESMTPS id z4a5b6 for <victim@corp.example>; Fri, 28 Aug 2026 13:47:50 -0700 (PDT)
+Return-Path: <accounts@globalsupplies-billing.com>
+From: "Global Supplies Vendor Accounts" <accounts@globalsupplies-billing.com>
+Reply-To: accounts-payable@globalsupplies-remit.com
+To: victim@corp.example
+Subject: Updated Payment Instructions - Invoice #4471
+Message-ID: <inv4471@globalsupplies-billing.com>
+Date: Fri, 28 Aug 2026 15:47:00 -0500
+Content-Type: text/plain; charset=utf-8
+
+Hello,
+
+Please note that we have recently changed our bank account details due
+to an internal audit. Kindly update your records and process the
+pending payment for Invoice #4471 ($48,250.00) to the new account
+information below as soon as possible:
+
+Bank: Coastal Trust Bank
+Account Name: Global Supplies Ltd
+Account Number: 4471-2298-01
+Routing: 044109862
+
+Please confirm once the wire transfer has been completed. We appreciate
+your prompt attention as this invoice is now overdue.
+
+Best regards,
+Accounts Receivable
+Global Supplies

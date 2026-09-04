@@ -19,11 +19,14 @@ export const authSpfDetector: Detector = {
     const { email, spfCheck, authResults, received } = ctx;
     const evidence: Evidence[] = [];
 
-    // Prefer our own re-check (DNS + originating IP); fall back to the
-    // provider-stamped verdict.
+    // Prefer our own re-check (DNS + originating IP). A "temperror" from the
+    // live check means our resolver couldn't reach DNS (timeout/SERVFAIL) —
+    // that's not a policy verdict, so fall back to the provider-stamped
+    // result (already evaluated at delivery time) when we have one.
     const ourResult = spfCheck?.result ?? null;
     const stamped = authResults.spf;
-    const effective = ourResult ?? stamped;
+    const liveUnreliable = ourResult === "temperror" || ourResult === null;
+    const effective = liveUnreliable ? (stamped ?? ourResult) : ourResult;
 
     if (!effective || effective === "pass" || effective === "bestguesspass") {
       return base(ctx, false, 0, 0.4, [

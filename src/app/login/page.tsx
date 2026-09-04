@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/server/auth";
 import { APP_NAME, APP_TAGLINE, Logo } from "@/components/Logo";
 import { GoogleButton } from "@/components/GoogleButton";
+import { signInForDemo } from "@/server/actions/auth";
 
 export const metadata: Metadata = { title: "Sign in" };
 
@@ -11,7 +12,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   const session = await auth();
   if (session?.user) redirect("/dashboard");
 
-  const { error, demo } = await searchParams;
+  const { error } = await searchParams;
 
   return (
     <main className="bg-grid flex flex-1 items-center justify-center px-6 py-16">
@@ -32,12 +33,21 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
 
           <GoogleButton />
 
-          {demo !== undefined && (
-            <p className="mt-3 text-center text-xs text-muted">
-              After sign-in you can load a sample threat mailbox from the scan
-              screen.
-            </p>
-          )}
+          <div className="my-4 flex items-center gap-3 text-[11px] text-muted">
+            <span className="h-px flex-1 bg-border" />
+            or
+            <span className="h-px flex-1 bg-border" />
+          </div>
+
+          <GoogleButton
+            label="Try the demo mailbox"
+            action={signInForDemo}
+            variant="secondary"
+          />
+          <p className="mt-2 text-center text-xs text-muted">
+            Still signs in with Google (read-only), but loads a curated set of
+            sample phishing / spoofing / BEC emails instead of your real inbox.
+          </p>
 
           {error && (
             <p className="mt-4 rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-300 ring-1 ring-rose-500/30">

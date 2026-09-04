@@ -36,7 +36,13 @@ const ROTATING = [
   "Looking for urgency and BEC language…",
 ];
 
-export function ScanRunner({ initial }: { initial: Progress | null }) {
+export function ScanRunner({
+  initial,
+  mode = "gmail",
+}: {
+  initial: Progress | null;
+  mode?: "gmail" | "demo";
+}) {
   const router = useRouter();
   const [progress, setProgress] = useState<Progress | null>(initial);
   const [running, setRunning] = useState(false);
@@ -80,8 +86,28 @@ export function ScanRunner({ initial }: { initial: Progress | null }) {
     [router],
   );
 
+  const loadDemo = useCallback(async () => {
+    setError(null);
+    setRunning(true);
+    try {
+      const res = await fetch("/api/demo/load", { method: "POST" });
+      const data = (await res.json()) as Progress & { error?: string };
+      if (!res.ok) {
+        setError(data.error ?? "Could not load the demo mailbox");
+        return;
+      }
+      setProgress(data);
+      setTimeout(() => router.push("/dashboard"), 1200);
+    } catch {
+      setError("Lost connection while loading the demo mailbox.");
+    } finally {
+      setRunning(false);
+    }
+  }, [router]);
+
   const start = useCallback(
     async (force = false) => {
+      if (mode === "demo") return loadDemo();
       setError(null);
       const res = await fetch("/api/scan/start", { method: "POST" });
       const data = (await res.json()) as Progress & { error?: string };
@@ -97,14 +123,19 @@ export function ScanRunner({ initial }: { initial: Progress | null }) {
       if (!data.done) void runLoop(data.jobId);
       else if (force) void runLoop(data.jobId);
     },
-    [runLoop],
+    [runLoop, mode, loadDemo],
   );
 
   // Kick off / resume on mount (deferred so we don't setState during the effect).
   useEffect(() => {
     const id = setTimeout(() => {
-      if (!initial) void start();
-      else if (!initial.done) void runLoop(initial.jobId);
+      if (mode === "demo") {
+        void loadDemo();
+      } else if (!initial) {
+        void start();
+      } else if (!initial.done) {
+        void runLoop(initial.jobId);
+      }
     }, 0);
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps

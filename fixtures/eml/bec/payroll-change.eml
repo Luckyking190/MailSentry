@@ -1,0 +1,25 @@
+Delivered-To: victim@corp.example
+Received: by mx.google.com with SMTPS id c7d8e9 for <victim@corp.example>; Sat, 29 Aug 2026 10:02:18 -0700 (PDT)
+Received: from smtp.hr-selfservice-portal.com (smtp.hr-selfservice-portal.com [62.171.146.9]) by mx.google.com with ESMTPS id f1g2h3 for <victim@corp.example>; Sat, 29 Aug 2026 10:02:16 -0700 (PDT)
+Return-Path: <hr-noreply@hr-selfservice-portal.com>
+From: "HR Payroll Team" <hr-noreply@hr-selfservice-portal.com>
+To: victim@corp.example
+Subject: Action needed: confirm your updated direct deposit details
+Message-ID: <payroll-update@hr-selfservice-portal.com>
+Date: Sat, 29 Aug 2026 12:02:00 -0500
+Content-Type: text/plain; charset=utf-8
+
+Hello,
+
+Our payroll provider has migrated to a new system and we need you to
+re-confirm your direct deposit banking details before the next pay run
+to avoid a delay in your payment.
+
+Please reply directly to this email with your updated bank account
+number and routing number, along with your employee ID for verification.
+
+This must be completed within 24 hours as payroll processing closes
+tomorrow.
+
+Thank you,
+HR Payroll Team

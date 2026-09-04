@@ -6,7 +6,7 @@ const URGENCY_RE =
 const SENSITIVE_RE =
   /\b(password|one[-\s]?time\s?(code|password|pin)|otp|\bssn\b|social security number|bank account (number|details)|routing number|credit card( number)?|cvv|card verification|login credentials|verify your (identity|card))\b/i;
 const BEC_RE =
-  /\b(change (the |our )?(bank|payment|account|wire) (details|account|information)|update (the |our )?(wire|payment|banking) (instructions|details)|process (this|the|an urgent) payment|pay (this|the) invoice (urgently|today)|purchase .*?gift cards?|buy .*?gift cards?|are you (available|at your desk|in the office)|need you to (handle|do) a (quick|small) (task|favou?r)|send me your (personal )?(cell|mobile|phone|number)|wire transfer (of|for)|remit(tance)? to a new)\b/i;
+  /\b((change|changed|update|updated)\s+(the\s+|our\s+)?(bank|payment|account|wire)(\s+\S+){0,2}\s+(details|account|information|instructions)|process(ed|ing)?\s+(the|this|an?)(\s+\S+){0,2}\s+payment|pay(ing)? (this|the) invoice|purchase .*?gift cards?|buy .*?gift cards?|are you (available|at your desk|in the office)|need you to (handle|do) a (quick|small) (task|favou?r)|send me your (personal )?(cell|mobile|phone|number)|wire transfer (of|for)|remit(tance)? to a new)\b/i;
 const REWARD_RE =
   /\b(you(?:'ve| have) won|congratulations,? you|claim your (prize|reward|refund|gift)|selected (as a )?winner|tax refund of|inheritance of|lottery|beneficiary)\b/i;
 

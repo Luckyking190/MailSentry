@@ -10,7 +10,7 @@
 > | 4 | URL + attachment analysis + domain intel (RDAP) | ✅ code complete — SSRF-guarded redirect resolver (IP-pinned), RDAP domain-age lookup, DomainReputation cache, upgraded url.analysis + attachment.analysis detectors, enriched UrlMeta/AttachmentMeta persistence; 38 tests green |
 > | 5 | Featherless LLM layer (content, BEC, social engineering) | ✅ code complete — OpenAI-compatible client, semaphore + backoff + Zod + repair-retry call layer, one combined prompt → 3 LLM-backed detectors, gated by `enableLlm` + degrades to deterministic-only with no API key; 53 tests green |
 > | 6 | Geolocation & forensic intelligence | ✅ code complete — ipinfo.io geolocation + PTR (cached), GeoIntel populated per public Received hop, `/mail/[id]` detail page: score gauge, signal blocks, hop timeline, Leaflet map, auth-authenticity card, links/attachments, raw headers |
-> | 7 | Demo mode, dashboard filters, mail page, settings | ⬜ not started |
+> | 7 | Demo mode, dashboard filters, mail page, settings | ✅ code complete — 14-email curated demo mailbox (validated end-to-end, 12/14 exact + 2 within-tolerance band matches against real DNS), "Try demo" login path, dashboard/mail filters, real settings (weights/thresholds/watchlist/LLM), single + bulk re-analysis, delete-my-data; fixed 3 real scoring bugs along the way (SPF temperror fallback, severity-tier score floors, homoglyph prefix matching) |
 > | 8 | Hardening, tests, performance, submission polish | ⬜ not started |
 
 ---

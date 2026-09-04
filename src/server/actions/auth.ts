@@ -6,6 +6,10 @@ export async function signInWithGoogle() {
   await signIn("google", { redirectTo: "/scan" });
 }
 
+export async function signInForDemo() {
+  await signIn("google", { redirectTo: "/scan?mode=demo" });
+}
+
 export async function signOutAction() {
   await signOut({ redirectTo: "/login" });
 }

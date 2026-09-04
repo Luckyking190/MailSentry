@@ -1,0 +1,31 @@
+Delivered-To: victim@corp.example
+Received: by mx.google.com with SMTPS id e1f2g3 for <victim@corp.example>; Tue, 25 Aug 2026 08:55:47 -0700 (PDT)
+Received: from mail.global-freight-logistics.com (mail.global-freight-logistics.com [146.70.87.234]) by mx.google.com with ESMTPS id h4i5j6 for <victim@corp.example>; Tue, 25 Aug 2026 08:55:45 -0700 (PDT)
+Return-Path: <billing@global-freight-logistics.com>
+From: "Global Freight Logistics" <billing@global-freight-logistics.com>
+To: victim@corp.example
+Subject: Invoice attached - Payment due
+Message-ID: <inv-84213@global-freight-logistics.com>
+Date: Tue, 25 Aug 2026 10:55:00 -0500
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="bnd-invoice-84213"
+
+--bnd-invoice-84213
+Content-Type: text/plain; charset=utf-8
+
+Please find attached the invoice for your recent shipment. Payment is
+due within 7 days.
+
+Regards,
+Global Freight Logistics Billing
+
+--bnd-invoice-84213
+Content-Type: application/octet-stream; name="Invoice_84213.pdf.exe"
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="Invoice_84213.pdf.exe"
+
+TVqQAAMAAAAEAAAA//8AALgAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAgAAAAA4fug4AtAnNIbgBTM0hVGhpcyBwcm9ncmFtIGNhbm5v
+dCBiZSBydW4gaW4gRE9TIG1vZGUuDQ0KJAAAAAAAAAA=
+
+--bnd-invoice-84213--

@@ -1,0 +1,23 @@
+Delivered-To: victim@corp.example
+Received: by mx.google.com with SMTPS id f7e6d5 for <victim@corp.example>; Wed, 19 Aug 2026 11:12:05 -0700 (PDT)
+Received: from send.shopfront-example.com (send.shopfront-example.com [162.253.128.19]) by mx.google.com with ESMTPS id c1b2a3 for <victim@corp.example>; Wed, 19 Aug 2026 11:12:03 -0700 (PDT)
+Return-Path: <orders@shopfront-example.com>
+From: "Shopfront Orders" <orders@shopfront-example.com>
+To: victim@corp.example
+Subject: Your order #58213 has shipped
+Message-ID: <order-58213@shopfront-example.com>
+Date: Wed, 19 Aug 2026 13:12:00 -0500
+Content-Type: text/plain; charset=utf-8
+
+Hi,
+
+Good news — your recent order has shipped and is on its way.
+
+Order: #58213
+Estimated delivery: Aug 22
+
+Track your package: https://shopfront-example.com/orders/58213/track
+
+Thanks for shopping with us.
+
+Shopfront Customer Care

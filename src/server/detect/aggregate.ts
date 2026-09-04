@@ -17,11 +17,19 @@ export type Aggregated = {
 /**
  * contribution_i = score_i · confidence_i · weight_i
  * score          = 100 · Σ contribution / Σ weight
- * plus a hard floor of 85 when any triggered signal is `critical`.
  *
  * A detector reporting `confidence: 0` (e.g. an LLM detector when the LLM
  * layer is disabled/degraded) is treated as "did not run" and excluded from
  * the denominator entirely, so a disabled layer never dilutes the score.
+ *
+ * The weighted average alone under-scores a message with one or two very
+ * strong findings and many clean checks (a real SPF+DMARC spoof shouldn't
+ * read as "low risk" just because attachments/URLs were clean). So each
+ * triggered signal's severity guarantees a floor at that severity's own band
+ * threshold — one critical finding is enough to land in the critical band,
+ * one high finding is enough to land in the high band, and so on — while the
+ * weighted average still determines the score *within* that floor and can
+ * push it higher when multiple signals corroborate.
  */
 export function aggregate(
   results: DetectorResult[],
@@ -40,8 +48,20 @@ export function aggregate(
   });
 
   let score = maxPossible > 0 ? Math.round((100 * raw) / maxPossible) : 0;
-  if (signals.some((s) => s.triggered && s.severity === "critical")) {
-    score = Math.max(score, 85);
+
+  // No floor for "low" severity — a single weak/circumstantial finding
+  // shouldn't alone force a clean message out of the SAFE band; it still
+  // pulls the weighted average up a little, which is enough.
+  const t = ctx.settings.bandThresholds;
+  const SEVERITY_FLOOR: Record<string, number> = {
+    critical: t.critical,
+    high: t.high,
+    medium: t.medium,
+  };
+  for (const s of signals) {
+    if (!s.triggered) continue;
+    const floor = SEVERITY_FLOOR[s.severity];
+    if (floor !== undefined) score = Math.max(score, floor);
   }
   score = Math.min(100, Math.max(0, score));
 

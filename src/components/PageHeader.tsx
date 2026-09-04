@@ -20,11 +20,10 @@ export function PageHeader({
   );
 }
 
-export function Placeholder({ phase, children }: { phase: string; children: React.ReactNode }) {
+export function EmptyState({ children }: { children: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-dashed border-border bg-surface/40 px-5 py-10 text-center">
       <p className="text-sm text-foreground">{children}</p>
-      <p className="mt-1 text-xs text-muted">Arrives in {phase}.</p>
     </div>
   );
 }

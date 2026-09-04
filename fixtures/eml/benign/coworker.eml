@@ -1,0 +1,22 @@
+Delivered-To: victim@corp.example
+Received: by mx.google.com with SMTPS id a9b8c7 for <victim@corp.example>; Tue, 18 Aug 2026 14:31:40 -0700 (PDT)
+Received: from mail.corp.example (mail.corp.example [178.63.19.44]) by mx.google.com with ESMTPS id e2f3a4 for <victim@corp.example>; Tue, 18 Aug 2026 14:31:38 -0700 (PDT)
+Return-Path: <priya.sharma@corp.example>
+From: "Priya Sharma" <priya.sharma@corp.example>
+To: victim@corp.example
+Subject: Notes from today's standup
+Message-ID: <notes-0818@corp.example>
+Date: Tue, 18 Aug 2026 16:31:00 -0500
+Content-Type: text/plain; charset=utf-8
+
+Hey,
+
+Quick recap from standup in case you missed it:
+
+- Auth refactor is on track for Thursday
+- QA found two edge cases in the CSV export, ticket is filed
+- We're skipping tomorrow's sync since most of the team is at the offsite
+
+Let me know if I missed anything.
+
+Priya

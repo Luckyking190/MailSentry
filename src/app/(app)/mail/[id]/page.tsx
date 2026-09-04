@@ -14,6 +14,7 @@ import { HopTimeline, type HopRow } from "@/components/HopTimeline";
 import { GeoMapLoader } from "@/components/GeoMapLoader";
 import type { GeoPoint } from "@/components/GeoMap";
 import { AuthenticityCard } from "@/components/AuthenticityCard";
+import { ReanalyzeButton } from "@/components/ReanalyzeButton";
 
 export const dynamic = "force-dynamic";
 
@@ -110,9 +111,12 @@ export default async function MailDetailPage(props: PageProps<"/mail/[id]">) {
         title={email.subject || "(no subject)"}
         description={`${email.fromDisplay ? `${email.fromDisplay} · ` : ""}${email.fromAddress}`}
         actions={
-          email.analysis && (
-            <RiskBadge band={email.analysis.band} score={email.analysis.score} />
-          )
+          <div className="flex items-center gap-3">
+            <ReanalyzeButton scope="one" emailId={email.id} label="Re-run analysis" />
+            {email.analysis && (
+              <RiskBadge band={email.analysis.band} score={email.analysis.score} />
+            )}
+          </div>
         }
       />
 

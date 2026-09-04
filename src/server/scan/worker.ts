@@ -1,21 +1,9 @@
-import type { ScanJob } from "@prisma/client";
-
 import { prisma } from "@/server/db";
 import { getGmailClient } from "@/server/gmail/client";
 import { fetchRawMessage } from "@/server/gmail/fetchRaw";
 import { parseEmail } from "@/server/mail/parse";
-import { runPipeline } from "@/server/detect/pipeline";
-import { getDomainReputation } from "@/server/intel/reputation";
-import { analyzeReceivedChain } from "@/server/intel/received-chain";
-import { geolocateMany } from "@/server/intel/geoip";
+import { persistAnalyzedEmail, loadUserSettings, type SettingsInput } from "./persist";
 import { toProgress, type ScanProgress } from "./job";
-
-type SettingsInput = {
-  detectorWeights: unknown;
-  bandThresholds: unknown;
-  brandWatchlist: string[];
-  enableLlm: boolean;
-};
 
 const BATCH_SIZE = Math.max(1, Number(process.env.SCAN_BATCH_SIZE ?? 5));
 const SOFT_TIME_BUDGET_MS = 40_000;
@@ -41,20 +29,10 @@ export async function tickScan(
   let processed = job.processed;
   let failed = job.failed;
 
-  const [gmail, settingsRow] = await Promise.all([
+  const [gmail, settings] = await Promise.all([
     getGmailClient(userId),
-    prisma.userSettings.upsert({
-      where: { userId },
-      create: { userId },
-      update: {},
-    }),
+    loadUserSettings(userId),
   ]);
-  const settings: SettingsInput = {
-    detectorWeights: settingsRow.detectorWeights,
-    bandThresholds: settingsRow.bandThresholds,
-    brandWatchlist: settingsRow.brandWatchlist,
-    enableLlm: settingsRow.enableLlm,
-  };
 
   while (queue.length > 0 && Date.now() - started < SOFT_TIME_BUDGET_MS) {
     const batch = queue.slice(0, BATCH_SIZE);
@@ -98,192 +76,16 @@ async function processOne(
 ): Promise<string> {
   const rawMsg = await fetchRawMessage(gmail, gmailId);
   const parsed = await parseEmail(rawMsg.raw, rawMsg.snippet ?? undefined);
-  const outcome = await runPipeline({ email: parsed, userId, settings });
 
-  const email = await prisma.emailRecord.upsert({
-    where: {
-      userId_source_gmailId: { userId, source: "gmail", gmailId },
-    },
-    create: {
-      userId,
-      scanJobId,
-      source: "gmail",
-      gmailId,
-      messageIdHdr: parsed.messageIdHdr,
-      fromAddress: parsed.fromAddress,
-      fromDisplay: parsed.fromDisplay,
-      senderDomain: parsed.senderDomain,
-      replyTo: parsed.replyTo,
-      returnPath: parsed.returnPath,
-      toAddresses: parsed.toAddresses,
-      subject: parsed.subject,
-      sentAt: parsed.sentAt ?? rawMsg.internalDate,
-      receivedAt: rawMsg.internalDate,
-      snippet: parsed.snippet,
-      bodyText: parsed.bodyText,
-      bodyHtml: parsed.bodyHtml,
-      rawHeaders: parsed.headers,
-      hasAttachments: parsed.hasAttachments,
-    },
-    update: {
-      scanJobId,
-      subject: parsed.subject,
-      senderDomain: parsed.senderDomain,
-      fromDisplay: parsed.fromDisplay,
-      hasAttachments: parsed.hasAttachments,
-    },
+  const { band } = await persistAnalyzedEmail({
+    userId,
+    scanJobId,
+    source: "gmail",
+    externalId: gmailId,
+    parsed,
+    sentAtHint: rawMsg.internalDate,
+    settings,
   });
 
-  await prisma.$transaction([
-    prisma.analysisResult.deleteMany({ where: { emailId: email.id } }),
-    prisma.analysisResult.create({
-      data: {
-        emailId: email.id,
-        score: outcome.score,
-        band: outcome.band,
-        categories: outcome.categories,
-        summary: outcome.summary,
-        engineVersion: outcome.engineVersion,
-        llmModel: outcome.llmModel ?? null,
-        llmDegraded: outcome.llmDegraded ?? false,
-        signals: {
-          create: outcome.signals.map((s) => ({
-            detectorId: s.detectorId,
-            category: s.category,
-            triggered: s.triggered,
-            rawScore: s.score,
-            confidence: s.confidence,
-            weight: s.weight,
-            contribution: s.contribution,
-            severity: s.severity,
-            evidence: s.evidence,
-            tags: s.tags ?? [],
-          })),
-        },
-      },
-    }),
-  ]);
-
-  // Persist enriched URL / attachment rows produced by the pipeline.
-  const urlRows = outcome.artifacts.urls.length
-    ? outcome.artifacts.urls
-    : parsed.urls.slice(0, 50).map((u) => ({
-        rawUrl: u.rawUrl,
-        finalUrl: null,
-        host: u.host,
-        scheme: u.scheme,
-        anchorText: u.anchorText,
-        anchorMismatch: false,
-        isShortener: false,
-        isPunycode: false,
-        redirectChain: [] as unknown[],
-        lengthScore: null,
-        entropyScore: null,
-        domainAgeDays: null,
-        verdict: null,
-      }));
-  const attRows = outcome.artifacts.attachments.length
-    ? outcome.artifacts.attachments
-    : parsed.attachments.map((a) => ({
-        filename: a.filename,
-        contentType: a.contentType,
-        sizeBytes: a.sizeBytes,
-        extension: a.extension,
-        isHighRisk: false,
-        isDoubleExt: false,
-        isArchive: false,
-      }));
-
-  await prisma.$transaction([
-    prisma.urlMeta.deleteMany({ where: { emailId: email.id } }),
-    prisma.attachmentMeta.deleteMany({ where: { emailId: email.id } }),
-    ...(urlRows.length
-      ? [
-          prisma.urlMeta.createMany({
-            data: urlRows.slice(0, 50).map((u) => ({
-              emailId: email.id,
-              rawUrl: u.rawUrl,
-              finalUrl: u.finalUrl ?? null,
-              host: u.host ?? null,
-              scheme: u.scheme ?? null,
-              anchorText: u.anchorText ?? null,
-              anchorMismatch: u.anchorMismatch ?? false,
-              isShortener: u.isShortener ?? false,
-              isPunycode: u.isPunycode ?? false,
-              redirectChain: (u.redirectChain ?? []) as object,
-              lengthScore: u.lengthScore ?? null,
-              entropyScore: u.entropyScore ?? null,
-              domainAgeDays: u.domainAgeDays ?? null,
-              verdict: u.verdict ?? null,
-            })),
-          }),
-        ]
-      : []),
-    ...(attRows.length
-      ? [
-          prisma.attachmentMeta.createMany({
-            data: attRows.map((a) => ({
-              emailId: email.id,
-              filename: a.filename,
-              contentType: a.contentType ?? null,
-              sizeBytes: a.sizeBytes ?? null,
-              extension: a.extension ?? null,
-              isHighRisk: a.isHighRisk ?? false,
-              isDoubleExt: a.isDoubleExt ?? false,
-              isArchive: a.isArchive ?? false,
-            })),
-          }),
-        ]
-      : []),
-  ]);
-
-  // Populate the shared domain-reputation cache (best effort; cached).
-  await getDomainReputation(parsed.senderDomain).catch(() => {});
-
-  // Geolocate every public hop in the Received chain.
-  await persistGeoIntel(email.id, parsed.receivedChain).catch(() => {});
-
-  return outcome.band;
+  return band;
 }
-
-async function persistGeoIntel(
-  emailId: string,
-  receivedHeaders: string[],
-): Promise<void> {
-  const { hops, originHop } = analyzeReceivedChain(receivedHeaders);
-  const publicHops = hops.filter((h) => h.isPublicIp && h.fromIp);
-  if (publicHops.length === 0) return;
-
-  const geos = await geolocateMany(
-    publicHops.map((h) => h.fromIp!),
-  );
-
-  await prisma.$transaction([
-    prisma.geoIntel.deleteMany({ where: { emailId } }),
-    prisma.geoIntel.createMany({
-      data: publicHops.map((h) => {
-        const g = geos.get(h.fromIp!);
-        return {
-          emailId,
-          hopIndex: h.index,
-          ip: h.fromIp!,
-          isTrustedOrigin: originHop?.index === h.index,
-          ptr: g?.ptr ?? null,
-          country: g?.country ?? null,
-          region: g?.region ?? null,
-          city: g?.city ?? null,
-          lat: g?.lat ?? null,
-          lon: g?.lon ?? null,
-          asn: g?.asn ?? null,
-          org: g?.org ?? null,
-          timestamp: h.timestamp,
-          byHost: h.byHost,
-          fromHost: h.fromHost,
-          provider: g?.provider ?? "unknown",
-        };
-      }),
-    }),
-  ]);
-}
-
-export type { ScanJob };

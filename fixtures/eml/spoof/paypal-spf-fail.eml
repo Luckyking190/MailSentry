@@ -1,0 +1,21 @@
+Delivered-To: victim@corp.example
+Received: by mx.google.com with SMTPS id 1a2b3c for <victim@corp.example>; Thu, 20 Aug 2026 03:44:12 -0700 (PDT)
+Received: from mail-relay.paypal-secure-notice.net (mail-relay.paypal-secure-notice.net [185.220.101.47]) by mx.google.com with ESMTPS id 4d5e6f for <victim@corp.example>; Thu, 20 Aug 2026 03:44:10 -0700 (PDT)
+Authentication-Results: mx.google.com; spf=fail (google.com: domain of service@paypal.com does not designate 185.220.101.47 as permitted sender) smtp.mailfrom=service@paypal.com; dkim=none; dmarc=fail (p=REJECT sp=REJECT dis=none) header.from=paypal.com
+Return-Path: <service@paypal.com>
+From: "PayPal" <service@paypal.com>
+Reply-To: paypal-support@secure-account-verify.info
+To: victim@corp.example
+Subject: Security Alert: Your account has been limited
+Message-ID: <alert-99213@paypal-secure-notice.net>
+Date: Thu, 20 Aug 2026 05:44:00 -0500
+Content-Type: text/html; charset=utf-8
+
+<html><body>
+<p>Dear Customer,</p>
+<p><strong>Immediate Action Required:</strong> We detected unusual activity on your
+account and have limited some features until you verify your identity.</p>
+<p>Failure to respond within 24 hours may result in permanent account suspension.</p>
+<p><a href="http://bit.ly/pp-verify-2026">Click here to verify your account at paypal.com</a></p>
+<p>Thank you,<br>PayPal Account Review Team</p>
+</body></html>

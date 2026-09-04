@@ -1,0 +1,92 @@
+[
+  {
+    "file": "benign/newsletter.eml",
+    "label": "Dev newsletter",
+    "category": "benign",
+    "expectedBand": "SAFE"
+  },
+  {
+    "file": "benign/coworker.eml",
+    "label": "Internal standup notes",
+    "category": "benign",
+    "expectedBand": "SAFE"
+  },
+  {
+    "file": "benign/receipt.eml",
+    "label": "Shipping confirmation",
+    "category": "benign",
+    "expectedBand": "SAFE"
+  },
+  {
+    "file": "benign/hr-benefits.eml",
+    "label": "Internal HR announcement",
+    "category": "benign",
+    "expectedBand": "SAFE"
+  },
+  {
+    "file": "spoof/paypal-spf-fail.eml",
+    "label": "Spoofed PayPal security alert",
+    "category": "spoof",
+    "expectedBand": "HIGH",
+    "notes": "Real paypal.com domain (published SPF ends ~all, so an unauthorized IP live-evaluates to softfail, not hard fail), unauthorized sending IP, DMARC=fail stamped."
+  },
+  {
+    "file": "spoof/hdfc-bank-spf-fail.eml",
+    "label": "Spoofed HDFC Bank KYC request",
+    "category": "spoof",
+    "expectedBand": "CRITICAL",
+    "notes": "Real hdfcbank.com domain, unauthorized sending IP; requests account number/OTP."
+  },
+  {
+    "file": "phishing/microsoft-lookalike.eml",
+    "label": "Microsoft support impersonation",
+    "category": "phishing",
+    "expectedBand": "HIGH",
+    "notes": "Homoglyph domain m1crosoft-secure-support.com, display-name impersonation, urgency, shortener."
+  },
+  {
+    "file": "phishing/paypal-typosquat.eml",
+    "label": "PayPal typosquat billing alert",
+    "category": "phishing",
+    "expectedBand": "HIGH",
+    "notes": "Typosquat domain paypa1-verify-account.com (edit distance 1), requests password/OTP."
+  },
+  {
+    "file": "malicious-url/anchor-mismatch.eml",
+    "label": "Fake parcel redelivery link",
+    "category": "malicious_url",
+    "expectedBand": "HIGH",
+    "notes": "Anchor text claims dhl.com, href is a bit.ly shortener."
+  },
+  {
+    "file": "malicious-attachment/double-extension.eml",
+    "label": "Invoice with .pdf.exe attachment",
+    "category": "malicious_attachment",
+    "expectedBand": "CRITICAL"
+  },
+  {
+    "file": "malicious-attachment/macro-doc.eml",
+    "label": "Macro-enabled financial report",
+    "category": "malicious_attachment",
+    "expectedBand": "HIGH"
+  },
+  {
+    "file": "bec/ceo-gift-cards.eml",
+    "label": "CEO gift-card request",
+    "category": "bec",
+    "expectedBand": "HIGH",
+    "notes": "Freemail sender claiming CEO identity, gift-card ask, avoids phone verification."
+  },
+  {
+    "file": "bec/payment-diversion-invoice.eml",
+    "label": "Vendor payment-diversion invoice",
+    "category": "bec",
+    "expectedBand": "HIGH"
+  },
+  {
+    "file": "bec/payroll-change.eml",
+    "label": "Fake payroll direct-deposit change",
+    "category": "bec",
+    "expectedBand": "HIGH"
+  }
+]

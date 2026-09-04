@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { DETECTOR_LABEL } from "@/lib/detectorLabels";
 
 export type SignalView = {
   id: string;
@@ -17,20 +18,6 @@ const SEVERITY_TONE: Record<string, string> = {
   medium: "bg-amber-500/10 text-amber-300 ring-amber-500/30",
   low: "bg-sky-500/10 text-sky-300 ring-sky-500/30",
   info: "bg-surface-2 text-muted ring-border",
-};
-
-const DETECTOR_LABEL: Record<string, string> = {
-  "auth.spf": "SPF validation",
-  "auth.dkim-dmarc": "DKIM / DMARC",
-  "sender.impersonation": "Sender impersonation",
-  "domain.lookalike": "Lookalike domain",
-  "header.anomaly": "Header anomaly",
-  "attachment.analysis": "Attachment analysis",
-  "url.analysis": "URL analysis",
-  "content.heuristic": "Content patterns",
-  "llm.content": "AI content analysis",
-  "llm.bec": "AI: Business Email Compromise",
-  "llm.social": "AI: social engineering",
 };
 
 export function SignalBlock({

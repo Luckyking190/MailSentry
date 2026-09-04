@@ -1,0 +1,23 @@
+Delivered-To: victim@corp.example
+Received: by mx.google.com with SMTPS id i4j5k6 for <victim@corp.example>; Sun, 30 Aug 2026 08:15:44 -0700 (PDT)
+Received: from mail.corp.example (mail.corp.example [178.63.19.44]) by mx.google.com with ESMTPS id l7m8n9 for <victim@corp.example>; Sun, 30 Aug 2026 08:15:42 -0700 (PDT)
+Return-Path: <hr@corp.example>
+From: "People Team" <hr@corp.example>
+To: victim@corp.example
+Subject: Open enrollment starts next week
+Message-ID: <enrollment-2026@corp.example>
+Date: Sun, 30 Aug 2026 10:15:00 -0500
+Content-Type: text/plain; charset=utf-8
+
+Hi team,
+
+Just a reminder that open enrollment for benefits starts next Monday and
+runs for two weeks. You'll be able to review and update your plan
+selections in the internal HR portal — no action is needed from you until
+then.
+
+We'll host an optional Q&A session on Wednesday at 11am if you have
+questions about the new dental plan options.
+
+Thanks,
+People Team

@@ -1,0 +1,25 @@
+Delivered-To: victim@corp.example
+Received: by mx.google.com with SMTPS id b1a2c3 for <victim@corp.example>; Mon, 17 Aug 2026 07:02:11 -0700 (PDT)
+Received: from mail3.devweekly-news.com (mail3.devweekly-news.com [198.2.128.55]) by mx.google.com with ESMTPS id d4e5f6 for <victim@corp.example>; Mon, 17 Aug 2026 07:02:09 -0700 (PDT)
+Return-Path: <bounce@devweekly-news.com>
+From: "Weekly Dev Digest" <digest@devweekly-news.com>
+To: victim@corp.example
+Subject: Issue #214: What we shipped this week
+Message-ID: <214-digest@devweekly-news.com>
+Date: Mon, 17 Aug 2026 09:02:00 -0500
+Content-Type: text/plain; charset=utf-8
+
+Hi there,
+
+Here's what caught our eye this week in the developer world:
+
+- A deep dive on structured concurrency in modern runtimes
+- Three talks from last month's infra conference, now on video
+- Reader-submitted tips for faster CI pipelines
+
+As always, thanks for reading. Reply to this email if you'd like to
+suggest a link for next week's issue.
+
+— The Dev Digest team
+
+Manage your subscription: https://devweekly-news.com/account/preferences

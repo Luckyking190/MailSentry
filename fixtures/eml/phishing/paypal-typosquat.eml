@@ -1,0 +1,21 @@
+Delivered-To: victim@corp.example
+Received: by mx.google.com with SMTPS id s7t8u9 for <victim@corp.example>; Sun, 23 Aug 2026 16:40:22 -0700 (PDT)
+Received: from smtp.paypa1-verify-account.com (smtp.paypa1-verify-account.com [103.28.54.211]) by mx.google.com with ESMTPS id v1w2x3 for <victim@corp.example>; Sun, 23 Aug 2026 16:40:20 -0700 (PDT)
+Return-Path: <security@paypa1-verify-account.com>
+From: "PayPal Security" <security@paypa1-verify-account.com>
+To: victim@corp.example
+Subject: Payment Failed - Update your billing information
+Message-ID: <pp-44120@paypa1-verify-account.com>
+Date: Sun, 23 Aug 2026 18:40:00 -0500
+Content-Type: text/plain; charset=utf-8
+
+We were unable to process a recent payment from your account due to a
+billing issue.
+
+To avoid suspension of your account, please confirm your password and
+one-time code within 24 hours by replying to this email.
+
+If you do not update your payment information, your account access will
+be restricted.
+
+PayPal Billing Team

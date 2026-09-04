@@ -1,0 +1,22 @@
+Delivered-To: victim@corp.example
+Received: by mx.google.com with SMTPS id m1n2o3 for <victim@corp.example>; Sat, 22 Aug 2026 09:05:33 -0700 (PDT)
+Received: from mailer.m1crosoft-secure-support.com (mailer.m1crosoft-secure-support.com [194.36.190.11]) by mx.google.com with ESMTPS id p4q5r6 for <victim@corp.example>; Sat, 22 Aug 2026 09:05:31 -0700 (PDT)
+Return-Path: <admin@m1crosoft-secure-support.com>
+From: "Microsoft Support" <admin@m1crosoft-secure-support.com>
+Reply-To: support-team@account-verify-center.net
+To: victim@corp.example
+Subject: Verify Your Account - Immediate Action Required
+Message-ID: <ms-99871@m1crosoft-secure-support.com>
+Date: Sat, 22 Aug 2026 11:05:00 -0500
+Content-Type: text/html; charset=utf-8
+
+<html><body>
+<p>Dear Microsoft user,</p>
+<p>We detected a sign-in attempt from an unrecognized device. Your account
+will be <strong>suspended within 24 hours</strong> unless you verify your
+identity.</p>
+<p><a href="http://bit.ly/ms-verify-now">Verify your account at microsoft.com</a></p>
+<p>If you did not request this, please secure your account immediately by
+confirming your password below.</p>
+<p>Microsoft Account Team</p>
+</body></html>

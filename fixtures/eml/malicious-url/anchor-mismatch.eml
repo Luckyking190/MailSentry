@@ -1,0 +1,17 @@
+Delivered-To: victim@corp.example
+Received: by mx.google.com with SMTPS id y4z5a6 for <victim@corp.example>; Mon, 24 Aug 2026 12:20:14 -0700 (PDT)
+Received: from notify.parcel-tracking-updates.com (notify.parcel-tracking-updates.com [91.243.85.19]) by mx.google.com with ESMTPS id b7c8d9 for <victim@corp.example>; Mon, 24 Aug 2026 12:20:12 -0700 (PDT)
+Return-Path: <notify@parcel-tracking-updates.com>
+From: "Delivery Notice" <notify@parcel-tracking-updates.com>
+To: victim@corp.example
+Subject: Your package could not be delivered
+Message-ID: <parcel-3391@parcel-tracking-updates.com>
+Date: Mon, 24 Aug 2026 14:20:00 -0500
+Content-Type: text/html; charset=utf-8
+
+<html><body>
+<p>We attempted to deliver your package today but no one was available.</p>
+<p>Please reschedule your delivery by confirming your address:</p>
+<p><a href="http://bit.ly/redeliver-pkg-393">https://www.dhl.com/track/redeliver</a></p>
+<p>Packages not rescheduled within 3 days will be returned to sender.</p>
+</body></html>
