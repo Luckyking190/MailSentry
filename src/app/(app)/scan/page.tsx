@@ -1,20 +1,25 @@
 import type { Metadata } from "next";
 
-import { PageHeader, Placeholder } from "@/components/PageHeader";
+import { auth } from "@/server/auth";
+import { getActiveOrLatestJob, toProgress } from "@/server/scan/job";
+import { PageHeader } from "@/components/PageHeader";
+import { ScanRunner } from "@/components/ScanRunner";
 
 export const metadata: Metadata = { title: "Scan" };
+export const dynamic = "force-dynamic";
 
-export default function ScanPage() {
+export default async function ScanPage() {
+  const session = await auth();
+  const job = await getActiveOrLatestJob(session!.user.id);
+  const initial = job ? toProgress(job) : null;
+
   return (
     <>
       <PageHeader
         title="Scanning your mailbox"
-        description='Fetching messages, resolving sender domains, and scoring each email — the "training" pass.'
+        description='Fetching messages, resolving senders, and scoring each email — the "training" pass.'
       />
-      <Placeholder phase="Phase 2">
-        The loading screen with live progress (list → fetch → analyze → domain
-        intel) will render here, driven by the batched scan job.
-      </Placeholder>
+      <ScanRunner initial={initial} />
     </>
   );
 }

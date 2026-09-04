@@ -5,7 +5,7 @@
 > | Phase | Title | State |
 > |---|---|---|
 > | 1 | Scaffold, deploy, auth | ✅ code complete — build + typecheck green; deploy/login pending Neon + Google OAuth credentials |
-> | 2 | Gmail ingest + minimal analysis + dashboard (vertical slice) | ⬜ not started |
+> | 2 | Gmail ingest + minimal analysis + dashboard (vertical slice) | ✅ code complete — Gmail client, MIME parsing, stub heuristic scorer, batched scan job (start/tick/status), live loading screen + dashboard; needs a real inbox to verify |
 > | 3 | Detector framework + deterministic detectors | ⬜ not started |
 > | 4 | URL + attachment analysis + domain intel (RDAP) | ⬜ not started |
 > | 5 | Featherless LLM layer (content, BEC, social engineering) | ⬜ not started |
