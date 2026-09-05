@@ -30,8 +30,8 @@ export function NavLinks() {
                 : "text-on-surface-variant hover:bg-surface-high hover:text-on-surface",
             )}
           >
-            <Icon name={l.icon} className="text-[20px]" />
-            <span>{l.label}</span>
+            <Icon name={l.icon} className="shrink-0 text-[20px]" />
+            <span className="truncate whitespace-nowrap">{l.label}</span>
           </Link>
         );
       })}
