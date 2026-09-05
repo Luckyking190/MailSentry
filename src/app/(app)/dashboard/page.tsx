@@ -14,7 +14,7 @@ import { StatTile } from "@/components/StatTile";
 import { NewMailWatcher } from "@/components/NewMailWatcher";
 import { getActiveOrLatestJob, toProgress } from "@/server/scan/job";
 import { BAND_ORDER, BAND_META, SIGNAL_CATEGORIES } from "@/lib/scoring";
-import { countryFlag, countryName } from "@/lib/geo";
+import { OriginLocations } from "@/components/OriginLocations";
 
 export const metadata: Metadata = { title: "Dashboard" };
 export const dynamic = "force-dynamic";
@@ -34,7 +34,7 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
   const band = one(sp.band);
   const since = one(sp.since);
 
-  const [total, byBand, job, byCountry] = await Promise.all([
+  const [total, byBand, job, byCountry, byPoint] = await Promise.all([
     prisma.emailRecord.count({ where: { userId } }),
     prisma.analysisResult.groupBy({
       by: ["band"],
@@ -53,9 +53,37 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
       orderBy: { _count: { country: "desc" } },
       take: 6,
     }),
+    // Same trusted-origin rule, but grouped by coordinate so the map can put
+    // one marker per distinct originating location rather than per country.
+    prisma.geoIntel.groupBy({
+      by: ["lat", "lon", "city", "country"],
+      where: {
+        isTrustedOrigin: true,
+        lat: { not: null },
+        lon: { not: null },
+        email: { userId },
+      },
+      _count: { _all: true },
+      // Prisma requires an order with `take`; counting down also means the cap
+      // drops the quietest origins rather than an arbitrary slice.
+      orderBy: { _count: { lat: "desc" } },
+      take: 300,
+    }),
   ]);
 
   const geoTotal = byCountry.reduce((n, r) => n + r._count._all, 0);
+
+  const originPoints = byPoint.map((p) => ({
+    lat: p.lat!,
+    lon: p.lon!,
+    city: p.city,
+    country: p.country,
+    count: p._count._all,
+  }));
+  const countryRows = byCountry.map((r) => ({
+    country: r.country,
+    count: r._count._all,
+  }));
 
   // An unfinished job keeps ticking from here, so the dashboard is usable
   // while the rest of the mailbox is still being scored.
@@ -187,54 +215,11 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
 
         <Card className="sheen">
           <CardBody>
-            <div className="mb-4 flex items-baseline justify-between gap-2">
-              <p className="text-xs font-medium text-muted">
-                Top incoming mail locations
-              </p>
-              {geoTotal > 0 && (
-                <p className="shrink-0 text-[11px] text-muted/60">
-                  {geoTotal} geolocated
-                </p>
-              )}
-            </div>
-            {geoTotal === 0 ? (
-              <p className="py-6 text-center text-xs text-muted/70">
-                No origin geography yet — it is resolved from each message&apos;s
-                earliest trusted mail server during a scan.
-              </p>
-            ) : (
-              <div className="flex flex-col gap-2.5">
-                {byCountry.map((row) => {
-                  const count = row._count._all;
-                  const pct = Math.round((count / geoTotal) * 100);
-                  return (
-                    <div key={row.country} className="flex items-center gap-3 text-xs">
-                      <span
-                        className="flex w-36 shrink-0 items-center gap-1.5 truncate"
-                        title={countryName(row.country)}
-                      >
-                        <span aria-hidden className="text-sm leading-none">
-                          {countryFlag(row.country)}
-                        </span>
-                        <span className="truncate text-muted">
-                          {countryName(row.country)}
-                        </span>
-                      </span>
-                      <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2">
-                        <span
-                          className="block h-full rounded-full bg-gradient-to-r from-brand to-brand-soft"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </span>
-                      <span className="w-12 shrink-0 text-right tnum text-muted">
-                        {count}
-                        <span className="ml-1 text-muted/50">{pct}%</span>
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            <OriginLocations
+              rows={countryRows}
+              points={originPoints}
+              total={geoTotal}
+            />
           </CardBody>
         </Card>
       </div>
