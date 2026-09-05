@@ -120,12 +120,16 @@ export function ScanRunner({
   }, [router]);
 
   const start = useCallback(
-    async () => {
+    async (full = false) => {
       if (mode === "demo") return loadDemo();
       setError(null);
-      // Scanning is always incremental: the queue holds only mail that has not
-      // been analyzed yet, so there is nothing a "re-scan" would usefully redo.
-      const res = await fetch("/api/scan/start", { method: "POST" });
+      // Incremental by default — the queue holds only mail that has not been
+      // analyzed yet. `full` re-queues the whole window instead.
+      const res = await fetch("/api/scan/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ full }),
+      });
       const data = (await res.json()) as Progress & { error?: string };
       if (!res.ok) {
         setError(
@@ -137,6 +141,7 @@ export function ScanRunner({
       }
       setProgress(data);
       if (!data.done) void runLoop(data.jobId);
+      else if (full) void runLoop(data.jobId);
     },
     [runLoop, mode, loadDemo],
   );
@@ -253,9 +258,18 @@ export function ScanRunner({
         {isDone && (
           <div className="mt-5">
             <BandBars histogram={progress!.bandHistogram} total={progress!.total} />
-            <div className="mt-4">
+            <div className="mt-4 flex gap-2">
               <Button size="sm" onClick={() => router.push("/dashboard")}>
                 View dashboard
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => void start(true)}
+                disabled={running}
+                title="Re-fetch and re-score every message in the scan window"
+              >
+                Re-scan
               </Button>
             </div>
           </div>

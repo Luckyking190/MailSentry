@@ -129,7 +129,7 @@ export default async function DashboardPage(props: PageProps<"/dashboard">) {
       {activeJob && <ScanRunner initial={toProgress(activeJob)} compact />}
 
       {/* Polls Gmail for arrivals and runs them through the same pipeline. */}
-      {!activeJob && total > 0 && <NewMailWatcher />}
+      {!activeJob && <NewMailWatcher />}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile label="Emails analyzed" value={total} tone="neutral" />

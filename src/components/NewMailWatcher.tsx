@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+import { Button } from "@/components/ui/button";
 import { RiskBadge } from "@/components/RiskBadge";
 import type { RiskBand } from "@prisma/client";
 
@@ -19,83 +20,103 @@ type NewMail = {
   } | null;
 };
 
-/** Gmail is polled, not pushed: a real-time feed needs a Pub/Sub `watch`
- *  renewed every 7 days plus a verified domain, which this deployment has no
- *  way to register. Five minutes is a compromise between freshness and burning
- *  Gmail quota on a mailbox that mostly is not changing. */
-const POLL_MS = 5 * 60_000;
+/**
+ * Gmail is polled, not pushed — a real-time feed needs a Pub/Sub `watch`
+ * renewed weekly plus a verified domain, which this deployment cannot
+ * register. A minute is cheap: the poll lists message ids and only fetches
+ * bodies for ids that are not already stored, so an idle mailbox costs one
+ * `messages.list` call.
+ */
+const POLL_MS = 60_000;
+
+function timeAgo(at: number | null): string {
+  if (!at) return "never";
+  const s = Math.round((Date.now() - at) / 1000);
+  if (s < 10) return "just now";
+  if (s < 60) return `${s}s ago`;
+  return `${Math.round(s / 60)}m ago`;
+}
 
 /**
- * Keeps the dashboard current: periodically asks Gmail for mail that arrived
- * since the last pass, runs it through the same pipeline, and raises a banner.
- * Rendered on the dashboard only, so polling stops when the user navigates
- * away rather than running for the life of the session.
+ * Keeps the dashboard current: pulls mail that has arrived since the last
+ * pass, runs it through the same pipeline, and raises a banner. Rendered on
+ * the dashboard only, so polling stops when the user navigates away.
  */
 export function NewMailWatcher() {
   const router = useRouter();
   const [news, setNews] = useState<NewMail | null>(null);
-  const [checking, setChecking] = useState(false);
+  const [status, setStatus] = useState<"idle" | "scanning">("idle");
+  const [lastRun, setLastRun] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const busy = useRef(false);
 
-  const check = useCallback(async () => {
-    // A scan tick can outlive the interval; overlapping runs would double-fetch.
-    if (busy.current) return;
-    busy.current = true;
-    setChecking(true);
-    try {
-      const started = await fetch("/api/scan/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ full: false }),
-      });
-      if (started.ok) {
-        const job = (await started.json()) as { jobId: string; done: boolean };
-        // Drain the queue this pass created, so new mail is fully scored
-        // (geo, signals, priority) before the banner claims it arrived.
-        while (!job.done) {
+  /** Run a scan pass, then refresh the unseen-mail counts. */
+  const scan = useCallback(
+    async (full = false) => {
+      // A pass can outlive the interval; overlapping runs would double-fetch.
+      if (busy.current) return;
+      busy.current = true;
+      setStatus("scanning");
+      setError(null);
+      try {
+        const started = await fetch("/api/scan/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ full }),
+        });
+        if (!started.ok) {
+          const e = (await started.json().catch(() => ({}))) as { error?: string };
+          setError(
+            e.error === "ReauthRequired"
+              ? "Google session expired — sign in again."
+              : (e.error ?? "Could not start scan"),
+          );
+          return;
+        }
+
+        // Drain the queue this pass created so new mail is fully scored —
+        // signals, geolocation, priority — before the banner announces it.
+        let progress = (await started.json()) as { jobId: string; done: boolean };
+        while (!progress.done) {
           const res = await fetch("/api/scan/tick", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ jobId: job.jobId }),
+            body: JSON.stringify({ jobId: progress.jobId }),
           });
           if (!res.ok) break;
-          const p = (await res.json()) as { done: boolean };
-          if (p.done) break;
+          const p = (await res.json()) as { jobId: string; done: boolean };
+          progress = { jobId: progress.jobId, done: p.done };
         }
-      }
 
-      const res = await fetch("/api/mail/new");
-      if (res.ok) {
-        const data = (await res.json()) as NewMail;
-        if (data.total > 0) {
-          setNews(data);
-          router.refresh();
+        const res = await fetch("/api/mail/new");
+        if (res.ok) {
+          const data = (await res.json()) as NewMail;
+          if (data.total > 0) setNews(data);
         }
+        router.refresh();
+      } catch {
+        setError("Lost connection — will retry on the next pass.");
+      } finally {
+        busy.current = false;
+        setLastRun(Date.now());
+        setStatus("idle");
       }
-    } catch {
-      // Offline or a failed tick — the next interval tries again.
-    } finally {
-      busy.current = false;
-      setChecking(false);
-    }
-  }, [router]);
+    },
+    [router],
+  );
 
   useEffect(() => {
-    // Show anything that landed while the user was away before polling again.
-    void (async () => {
-      try {
-        const res = await fetch("/api/mail/new");
-        if (!res.ok) return;
-        const data = (await res.json()) as NewMail;
-        if (data.total > 0) setNews(data);
-      } catch {
-        /* first paint should never depend on this */
-      }
-    })();
-
-    const t = setInterval(() => void check(), POLL_MS);
-    return () => clearInterval(t);
-  }, [check]);
+    // Scan immediately on mount, then on an interval. Waiting a full period
+    // before the first pass made the watcher look broken on a fresh dashboard.
+    // Deferred by a tick so the first setState lands after the effect body
+    // rather than cascading a render inside it.
+    const kick = setTimeout(() => void scan(false), 0);
+    const t = setInterval(() => void scan(false), POLL_MS);
+    return () => {
+      clearTimeout(kick);
+      clearInterval(t);
+    };
+  }, [scan]);
 
   const dismiss = useCallback(async () => {
     setNews(null);
@@ -103,55 +124,90 @@ export function NewMailWatcher() {
     router.refresh();
   }, [router]);
 
-  if (!news) {
-    return (
-      <div className="mb-4 flex items-center justify-end">
-        <button
-          onClick={() => void check()}
-          disabled={checking}
-          className="text-xs text-muted underline-offset-4 hover:text-foreground hover:underline disabled:opacity-50"
-        >
-          {checking ? "Checking for new mail…" : "Check for new mail"}
-        </button>
-      </div>
-    );
-  }
+  const scanning = status === "scanning";
 
   return (
-    <div className="mb-4 rounded-xl border border-brand/40 bg-brand/10 px-4 py-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-medium">
-            {news.total} new {news.total === 1 ? "email" : "emails"} analyzed
-            {news.flagged > 0 && (
-              <span className="text-orange-300"> · {news.flagged} flagged</span>
+    <div className="mb-4 flex flex-col gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-surface px-4 py-2.5">
+        <div className="flex min-w-0 items-center gap-2 text-xs">
+          <span
+            className={
+              scanning
+                ? "size-1.5 animate-pulse rounded-full bg-brand"
+                : "size-1.5 rounded-full bg-safe"
+            }
+          />
+          <span className="text-muted">
+            {scanning ? (
+              "Checking Gmail for new mail…"
+            ) : error ? (
+              <span className="text-high">{error}</span>
+            ) : (
+              <>
+                Auto-checking every minute · last checked{" "}
+                <span className="text-foreground">{timeAgo(lastRun)}</span>
+              </>
             )}
-          </p>
-          {news.top && (
-            <Link
-              href={`/mail/${news.top.id}`}
-              className="mt-1 flex items-center gap-2 text-xs text-muted hover:text-foreground"
-            >
-              <span className="min-w-0 truncate">
-                Top priority: {news.top.subject || "(no subject)"}
-                <span className="ml-1 text-muted/70">{news.top.senderDomain}</span>
-              </span>
-              {news.top.analysis && (
-                <RiskBadge
-                  band={news.top.analysis.band}
-                  score={news.top.analysis.score}
-                />
-              )}
-            </Link>
-          )}
+          </span>
         </div>
-        <button
-          onClick={() => void dismiss()}
-          className="shrink-0 text-xs text-muted hover:text-foreground"
-        >
-          Dismiss
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => void scan(false)}
+            disabled={scanning}
+          >
+            {scanning ? "Scanning…" : "Rescan"}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => void scan(true)}
+            disabled={scanning}
+            title="Re-fetch and re-score every message in the scan window, not just new arrivals"
+          >
+            Full rescan
+          </Button>
+        </div>
       </div>
+
+      {news && (
+        <div className="rounded-xl border border-brand/40 bg-brand/10 px-4 py-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium">
+                {news.total} new {news.total === 1 ? "email" : "emails"} analyzed
+                {news.flagged > 0 && (
+                  <span className="text-high"> · {news.flagged} flagged</span>
+                )}
+              </p>
+              {news.top && (
+                <Link
+                  href={`/mail/${news.top.id}`}
+                  className="mt-1 flex items-center gap-2 text-xs text-muted hover:text-foreground"
+                >
+                  <span className="min-w-0 truncate">
+                    Top priority: {news.top.subject || "(no subject)"}
+                    <span className="ml-1 text-muted/70">{news.top.senderDomain}</span>
+                  </span>
+                  {news.top.analysis && (
+                    <RiskBadge
+                      band={news.top.analysis.band}
+                      score={news.top.analysis.score}
+                    />
+                  )}
+                </Link>
+              )}
+            </div>
+            <button
+              onClick={() => void dismiss()}
+              className="shrink-0 text-xs text-muted hover:text-foreground"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

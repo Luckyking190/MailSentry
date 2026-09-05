@@ -49,6 +49,8 @@ export async function getActiveOrLatestJob(
 export async function startScan(
   userId: string,
   source: EmailSource = "gmail",
+  /** Re-queue the whole window instead of only new arrivals. */
+  full = false,
 ): Promise<ScanJob> {
   const existing = await prisma.scanJob.findFirst({
     where: { userId, phase: { in: [...ACTIVE_PHASES] } },
@@ -83,10 +85,12 @@ export async function startScan(
     // whole window. Skipping known ids turns a re-run into an incremental
     // pass over just the new arrivals, which is what makes polling for new
     // mail cheap enough to do on an interval.
-    const known = await prisma.emailRecord.findMany({
-      where: { userId, source: "gmail", gmailId: { in: ids } },
-      select: { gmailId: true },
-    });
+    const known = full
+      ? []
+      : await prisma.emailRecord.findMany({
+          where: { userId, source: "gmail", gmailId: { in: ids } },
+          select: { gmailId: true },
+        });
     const seen = new Set(known.map((e) => e.gmailId));
     const fresh = ids.filter((id) => !seen.has(id));
 
