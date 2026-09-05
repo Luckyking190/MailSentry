@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 
 import { auth } from "@/server/auth";
 import { getActiveOrLatestJob, toProgress } from "@/server/scan/job";
-import { PageHeader } from "@/components/PageHeader";
 import { ScanRunner } from "@/components/ScanRunner";
 
 export const metadata: Metadata = { title: "Scan" };
@@ -17,17 +16,6 @@ export default async function ScanPage(props: PageProps<"/scan">) {
     mode === "gmail" ? await getActiveOrLatestJob(session!.user.id) : null;
   const initial = job ? toProgress(job) : null;
 
-  return (
-    <>
-      <PageHeader
-        title={mode === "demo" ? "Loading the demo mailbox" : "Scanning your mailbox"}
-        description={
-          mode === "demo"
-            ? "Parsing and scoring a curated set of sample phishing, spoofing, and BEC emails."
-            : 'Fetching messages, resolving senders, and scoring each email — the "training" pass.'
-        }
-      />
-      <ScanRunner initial={initial} mode={mode} />
-    </>
-  );
+  // The runner owns the whole screen now — banner, gauge, checklist, stream.
+  return <ScanRunner initial={initial} mode={mode} />;
 }
